@@ -348,4 +348,14 @@ Respond in JSON format:
   }
 }
 
+// Verifiable Arbitration (SOLPRISM integration)
+export { 
+  VerifiableArbitrator, 
+  hashReasoning, 
+  formatForOnChain,
+  type ArbitrationReasoning,
+  type CommitResult,
+  type VerifyResult 
+} from "./verifiable-arbitration";
+
 export default PayGuardClient;
