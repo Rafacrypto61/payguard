@@ -209,6 +209,15 @@
         </div>
     </section>
 
+    <!-- Modal -->
+    <div id="modal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-xl p-6 max-w-md mx-4">
+            <h3 id="modal-title" class="text-xl font-bold mb-4"></h3>
+            <div id="modal-content" class="text-gray-300"></div>
+            <button onclick="closeModal()" class="mt-4 w-full bg-green-500 hover:bg-green-600 py-2 rounded-lg font-medium">Close</button>
+        </div>
+    </div>
+
     <!-- Footer -->
     <footer class="border-t border-gray-800 px-6 py-8">
         <div class="max-w-6xl mx-auto text-center text-gray-500 text-sm">
@@ -216,5 +225,106 @@
             <p class="mt-2">© 2026 PayGuard • MIT License</p>
         </div>
     </footer>
+
+    <script>
+        function showModal(title, content) {
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-content').innerHTML = content;
+            document.getElementById('modal').classList.remove('hidden');
+            document.getElementById('modal').classList.add('flex');
+        }
+        
+        function closeModal() {
+            document.getElementById('modal').classList.add('hidden');
+            document.getElementById('modal').classList.remove('flex');
+        }
+
+        // Connect Wallet button
+        document.querySelectorAll('button').forEach(btn => {
+            if (btn.textContent.includes('Connect Wallet')) {
+                btn.onclick = () => showModal('Connect Wallet', `
+                    <p class="mb-4">Select a wallet to connect:</p>
+                    <div class="space-y-2">
+                        <button onclick="simulateConnect('Phantom')" class="w-full bg-purple-600 hover:bg-purple-700 py-3 rounded-lg flex items-center justify-center gap-2">
+                            👻 Phantom
+                        </button>
+                        <button onclick="simulateConnect('Solflare')" class="w-full bg-orange-600 hover:bg-orange-700 py-3 rounded-lg flex items-center justify-center gap-2">
+                            🌞 Solflare
+                        </button>
+                        <button onclick="simulateConnect('Backpack')" class="w-full bg-blue-600 hover:bg-blue-700 py-3 rounded-lg flex items-center justify-center gap-2">
+                            🎒 Backpack
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-4">Demo mode - no real connection</p>
+                `);
+            }
+            if (btn.textContent.includes('Create Contract')) {
+                btn.onclick = () => showModal('Create Escrow Contract', `
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-sm text-gray-400">Freelancer Wallet</label>
+                            <input type="text" placeholder="Enter Solana address..." class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 mt-1">
+                        </div>
+                        <div>
+                            <label class="text-sm text-gray-400">Amount (USDC)</label>
+                            <input type="number" placeholder="500" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 mt-1">
+                        </div>
+                        <div>
+                            <label class="text-sm text-gray-400">Milestone Description</label>
+                            <textarea placeholder="Describe the deliverable..." class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 mt-1 h-20"></textarea>
+                        </div>
+                        <button onclick="simulateCreate()" class="w-full bg-green-500 hover:bg-green-600 py-3 rounded-lg font-bold">
+                            🔐 Create & Lock Funds
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-4">Demo mode - connect wallet on devnet to test</p>
+                `);
+            }
+            if (btn.textContent.includes('View Demo')) {
+                btn.onclick = () => {
+                    document.getElementById('ai-result').scrollIntoView({ behavior: 'smooth' });
+                };
+            }
+        });
+
+        function simulateConnect(wallet) {
+            showModal('Wallet Connected! ✅', `
+                <p class="text-green-400 font-bold mb-2">${wallet} connected successfully!</p>
+                <p class="text-sm text-gray-400 mb-4">Address: 7xKX...9fGh (demo)</p>
+                <p>In production, this would:</p>
+                <ul class="list-disc list-inside text-sm text-gray-300 mt-2">
+                    <li>Connect to your real wallet</li>
+                    <li>Show your USDC balance</li>
+                    <li>Enable contract creation</li>
+                </ul>
+            `);
+        }
+
+        function simulateCreate() {
+            showModal('Contract Created! 🎉', `
+                <div class="text-center">
+                    <div class="text-4xl mb-4">✅</div>
+                    <p class="text-green-400 font-bold mb-2">Escrow Created Successfully</p>
+                    <p class="text-sm text-gray-400 mb-4">Contract ID: PG-001-DEMO</p>
+                    <div class="bg-gray-900 rounded-lg p-4 text-left text-sm">
+                        <p><span class="text-gray-500">Status:</span> <span class="text-yellow-400">Awaiting Delivery</span></p>
+                        <p><span class="text-gray-500">Amount:</span> <span class="text-green-400">500 USDC</span></p>
+                        <p><span class="text-gray-500">PDA:</span> <span class="text-blue-400">5xYz...demo</span></p>
+                    </div>
+                </div>
+            `);
+        }
+
+        // Animate the AI thinking effect
+        let dots = 0;
+        setInterval(() => {
+            const el = document.querySelector('.animate-pulse');
+            if (el) {
+                dots = (dots + 1) % 4;
+                el.parentElement.querySelector('span:last-child').textContent = 
+                    'AI Arbitrator analyzing' + '.'.repeat(dots);
+            }
+        }, 500);
+    </script>
 </body>
 </html>
