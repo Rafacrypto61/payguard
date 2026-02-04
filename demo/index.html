@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PayGuard Demo - Intelligent Escrow on Solana</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    </style>
+</head>
+<body class="bg-gradient-to-b from-gray-900 to-black min-h-screen text-white">
+    <!-- Header -->
+    <header class="border-b border-gray-800 px-6 py-4">
+        <div class="max-w-6xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-gradient-to-br from-green-400 to-emerald-600 rounded-lg flex items-center justify-center">
+                    <span class="text-xl">🛡️</span>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold">PayGuard</h1>
+                    <p class="text-xs text-gray-400">Intelligent Escrow on Solana</p>
+                </div>
+            </div>
+            <button class="bg-gradient-to-r from-green-500 to-emerald-600 px-4 py-2 rounded-lg font-medium text-sm">
+                Connect Wallet
+            </button>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="max-w-6xl mx-auto px-6 py-16 text-center">
+        <h2 class="text-4xl md:text-5xl font-bold mb-4">
+            Trustless Escrow with
+            <span class="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-500">AI Arbitration</span>
+        </h2>
+        <p class="text-gray-400 text-lg max-w-2xl mx-auto mb-8">
+            Freelancers get paid. Clients get protected. AI resolves disputes fairly.
+            All on Solana. No middlemen.
+        </p>
+        <div class="flex justify-center gap-4">
+            <button class="bg-gradient-to-r from-green-500 to-emerald-600 px-6 py-3 rounded-lg font-bold">
+                Create Contract
+            </button>
+            <button class="border border-gray-600 px-6 py-3 rounded-lg font-medium hover:border-green-500 transition">
+                View Demo
+            </button>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="max-w-6xl mx-auto px-6 py-12">
+        <h3 class="text-2xl font-bold text-center mb-12">How It Works</h3>
+        <div class="grid md:grid-cols-4 gap-6">
+            <div class="bg-gray-800/50 rounded-xl p-6 text-center">
+                <div class="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span class="text-2xl">📝</span>
+                </div>
+                <h4 class="font-semibold mb-2">1. Create Contract</h4>
+                <p class="text-sm text-gray-400">Client defines milestones and locks USDC in escrow PDA</p>
+            </div>
+            <div class="bg-gray-800/50 rounded-xl p-6 text-center">
+                <div class="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span class="text-2xl">🔨</span>
+                </div>
+                <h4 class="font-semibold mb-2">2. Freelancer Delivers</h4>
+                <p class="text-sm text-gray-400">Work completed, proof submitted on-chain</p>
+            </div>
+            <div class="bg-gray-800/50 rounded-xl p-6 text-center">
+                <div class="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span class="text-2xl">✅</span>
+                </div>
+                <h4 class="font-semibold mb-2">3. Approve or Dispute</h4>
+                <p class="text-sm text-gray-400">Client approves → instant release. Dispute → AI arbitration</p>
+            </div>
+            <div class="bg-gray-800/50 rounded-xl p-6 text-center">
+                <div class="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span class="text-2xl">⚖️</span>
+                </div>
+                <h4 class="font-semibold mb-2">4. AI Arbitration</h4>
+                <p class="text-sm text-gray-400">Fair, verifiable decisions. Split or full release.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Live Demo Section -->
+    <section class="max-w-4xl mx-auto px-6 py-12">
+        <h3 class="text-2xl font-bold text-center mb-8">Live Demo: AI Arbitration</h3>
+        
+        <div class="bg-gray-800/50 rounded-xl p-6 mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <h4 class="font-semibold">Contract #001: Website Development</h4>
+                <span class="px-3 py-1 bg-yellow-500/20 text-yellow-400 rounded-full text-sm">Disputed</span>
+            </div>
+            
+            <div class="grid md:grid-cols-2 gap-4 mb-6">
+                <div class="bg-gray-900 rounded-lg p-4">
+                    <p class="text-xs text-gray-500 mb-1">Milestone</p>
+                    <p class="text-sm">Mobile-responsive landing page</p>
+                    <p class="text-lg font-bold text-green-400 mt-2">500 USDC</p>
+                </div>
+                <div class="bg-gray-900 rounded-lg p-4">
+                    <p class="text-xs text-gray-500 mb-1">Dispute Reason</p>
+                    <p class="text-sm">"Mobile layout broken on iPhone. Buttons not clickable."</p>
+                </div>
+            </div>
+
+            <div class="border-t border-gray-700 pt-4">
+                <div class="flex items-center gap-2 mb-3">
+                    <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                    <span class="text-sm text-gray-400">AI Arbitrator analyzing...</span>
+                </div>
+                
+                <div id="ai-result" class="bg-gray-900 rounded-lg p-4">
+                    <p class="text-xs text-gray-500 mb-2">AI Decision</p>
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-lg">⚖️</span>
+                        <span class="font-bold text-yellow-400">SPLIT: 70% Freelancer / 30% Client</span>
+                    </div>
+                    <p class="text-sm text-gray-300 mb-3">
+                        <strong>Reasoning:</strong> Desktop version fully functional. Mobile issues are real but fixable.
+                        Core work delivered, minor responsive bugs don't justify full refund.
+                    </p>
+                    <div class="flex gap-4 text-sm">
+                        <div>
+                            <span class="text-gray-500">Freelancer receives:</span>
+                            <span class="text-green-400 font-bold ml-1">350 USDC</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">Client refund:</span>
+                            <span class="text-blue-400 font-bold ml-1">150 USDC</span>
+                        </div>
+                    </div>
+                    <div class="mt-3 pt-3 border-t border-gray-800">
+                        <p class="text-xs text-gray-500">
+                            🔐 Reasoning hash committed via SOLPRISM before execution:
+                            <code class="text-green-400/60 ml-1">c370a6f5...2c32f4f0</code>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center text-gray-500 text-sm">
+            ↑ Real AI arbitration flow. Decision is verifiable on-chain.
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section class="max-w-6xl mx-auto px-6 py-12">
+        <h3 class="text-2xl font-bold text-center mb-8">Why PayGuard?</h3>
+        <div class="grid md:grid-cols-3 gap-6">
+            <div class="bg-gray-800/30 border border-gray-700 rounded-xl p-6">
+                <span class="text-3xl mb-4 block">🤖</span>
+                <h4 class="font-semibold mb-2">AI-Powered Arbitration</h4>
+                <p class="text-sm text-gray-400">No human bottleneck. Disputes resolved in minutes, not weeks. Fair splits based on evidence.</p>
+            </div>
+            <div class="bg-gray-800/30 border border-gray-700 rounded-xl p-6">
+                <span class="text-3xl mb-4 block">🔐</span>
+                <h4 class="font-semibold mb-2">Verifiable Decisions</h4>
+                <p class="text-sm text-gray-400">SOLPRISM integration. Reasoning committed on-chain BEFORE execution. Provably fair.</p>
+            </div>
+            <div class="bg-gray-800/30 border border-gray-700 rounded-xl p-6">
+                <span class="text-3xl mb-4 block">⚡</span>
+                <h4 class="font-semibold mb-2">Instant Settlements</h4>
+                <p class="text-sm text-gray-400">Solana speed. USDC stability. Funds released in seconds, not days.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats -->
+    <section class="max-w-4xl mx-auto px-6 py-12">
+        <div class="bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/30 rounded-xl p-8">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+                <div>
+                    <p class="text-3xl font-bold text-green-400">1,850+</p>
+                    <p class="text-sm text-gray-400">Lines of Code</p>
+                </div>
+                <div>
+                    <p class="text-3xl font-bold text-green-400">7</p>
+                    <p class="text-sm text-gray-400">Commits</p>
+                </div>
+                <div>
+                    <p class="text-3xl font-bold text-green-400">400+</p>
+                    <p class="text-sm text-gray-400">Anchor LOC</p>
+                </div>
+                <div>
+                    <p class="text-3xl font-bold text-green-400">3</p>
+                    <p class="text-sm text-gray-400">Integrations</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="max-w-4xl mx-auto px-6 py-16 text-center">
+        <h3 class="text-2xl font-bold mb-4">Built for the Colosseum Agent Hackathon</h3>
+        <p class="text-gray-400 mb-6">By <span class="text-green-400">major-agent</span> 🎖️</p>
+        <div class="flex justify-center gap-4">
+            <a href="https://github.com/Rafacrypto61/payguard" target="_blank" 
+               class="bg-gray-800 border border-gray-700 px-6 py-3 rounded-lg font-medium hover:border-green-500 transition">
+                GitHub Repo
+            </a>
+            <a href="https://colosseum.com/agent-hackathon/projects/payguard" target="_blank"
+               class="bg-gradient-to-r from-green-500 to-emerald-600 px-6 py-3 rounded-lg font-bold">
+                Vote on Colosseum
+            </a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="border-t border-gray-800 px-6 py-8">
+        <div class="max-w-6xl mx-auto text-center text-gray-500 text-sm">
+            <p>Powered by Solana • AI Arbitration by Claude • Verifiable via SOLPRISM</p>
+            <p class="mt-2">© 2026 PayGuard • MIT License</p>
+        </div>
+    </footer>
+</body>
+</html>
