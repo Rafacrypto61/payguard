@@ -3,259 +3,606 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PayGuard Demo - Intelligent Escrow on Solana</title>
+    <title>PayGuard - Intelligent Escrow on Solana</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(16, 185, 129, 0.3); }
+            50% { box-shadow: 0 0 40px rgba(16, 185, 129, 0.6); }
+        }
+        @keyframes gradient-shift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        @keyframes fade-in-up {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fade-in {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes slide-in-left {
+            from { opacity: 0; transform: translateX(-50px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes slide-in-right {
+            from { opacity: 0; transform: translateX(50px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes bounce-in {
+            0% { transform: scale(0.3); opacity: 0; }
+            50% { transform: scale(1.05); }
+            70% { transform: scale(0.9); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        @keyframes typing {
+            from { width: 0; }
+            to { width: 100%; }
+        }
+        
+        .animate-float { animation: float 6s ease-in-out infinite; }
+        .animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+        .animate-gradient { 
+            background-size: 200% 200%;
+            animation: gradient-shift 3s ease infinite;
+        }
+        .animate-fade-in-up { animation: fade-in-up 0.8s ease-out forwards; }
+        .animate-fade-in { animation: fade-in 1s ease-out forwards; }
+        .animate-slide-left { animation: slide-in-left 0.8s ease-out forwards; }
+        .animate-slide-right { animation: slide-in-right 0.8s ease-out forwards; }
+        .animate-bounce-in { animation: bounce-in 0.6s ease-out forwards; }
+        .animate-shimmer {
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+            background-size: 200% 100%;
+            animation: shimmer 2s infinite;
+        }
+        
+        .delay-100 { animation-delay: 0.1s; }
+        .delay-200 { animation-delay: 0.2s; }
+        .delay-300 { animation-delay: 0.3s; }
+        .delay-400 { animation-delay: 0.4s; }
+        .delay-500 { animation-delay: 0.5s; }
+        .delay-600 { animation-delay: 0.6s; }
+        
+        .opacity-0 { opacity: 0; }
+        
+        .card-hover {
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .card-hover:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 20px 40px rgba(16, 185, 129, 0.2);
+        }
+        
+        .btn-glow {
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        .btn-glow::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s ease;
+        }
+        .btn-glow:hover::before {
+            left: 100%;
+        }
+        .btn-glow:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 30px rgba(16, 185, 129, 0.4);
+        }
+        
+        .text-gradient {
+            background: linear-gradient(135deg, #10b981, #34d399, #6ee7b7, #10b981);
+            background-size: 300% 300%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: gradient-shift 4s ease infinite;
+        }
+        
+        .bg-grid {
+            background-image: 
+                linear-gradient(rgba(16, 185, 129, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(16, 185, 129, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+        }
+        
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: rgba(16, 185, 129, 0.6);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+        
+        .glow-border {
+            position: relative;
+        }
+        .glow-border::before {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            background: linear-gradient(45deg, #10b981, #059669, #10b981, #34d399);
+            background-size: 400% 400%;
+            border-radius: inherit;
+            z-index: -1;
+            animation: gradient-shift 3s ease infinite;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .glow-border:hover::before {
+            opacity: 1;
+        }
+        
+        .typing-effect {
+            overflow: hidden;
+            white-space: nowrap;
+            border-right: 2px solid #10b981;
+            animation: typing 2s steps(40) forwards, blink 0.5s step-end infinite alternate;
+        }
+        @keyframes blink {
+            50% { border-color: transparent; }
+        }
+
+        .hero-glow {
+            position: absolute;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, transparent 70%);
+            border-radius: 50%;
+            filter: blur(60px);
+            animation: float 8s ease-in-out infinite;
+        }
+
+        .stat-counter {
+            transition: all 0.3s ease;
+        }
+        .stat-counter:hover {
+            transform: scale(1.1);
+            color: #10b981;
+        }
+
+        .icon-bounce:hover {
+            animation: bounce-in 0.5s ease;
+        }
+
+        /* Scroll animations */
+        .reveal {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.8s ease;
+        }
+        .reveal.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
     </style>
 </head>
-<body class="bg-gradient-to-b from-gray-900 to-black min-h-screen text-white">
+<body class="bg-gradient-to-b from-gray-900 via-gray-900 to-black min-h-screen text-white overflow-x-hidden">
+    <!-- Animated Background -->
+    <div class="fixed inset-0 bg-grid opacity-50 pointer-events-none"></div>
+    <div class="fixed top-1/4 left-1/4 hero-glow"></div>
+    <div class="fixed bottom-1/4 right-1/4 hero-glow" style="animation-delay: -4s;"></div>
+    
+    <!-- Floating Particles Container -->
+    <div id="particles" class="fixed inset-0 pointer-events-none overflow-hidden"></div>
+
     <!-- Header -->
-    <header class="border-b border-gray-800 px-6 py-4">
+    <header class="border-b border-gray-800/50 backdrop-blur-sm px-6 py-4 sticky top-0 z-40 animate-fade-in">
         <div class="max-w-6xl mx-auto flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 bg-gradient-to-br from-green-400 to-emerald-600 rounded-lg flex items-center justify-center">
-                    <span class="text-xl">🛡️</span>
+            <div class="flex items-center gap-3 group cursor-pointer">
+                <div class="w-12 h-12 bg-gradient-to-br from-green-400 to-emerald-600 rounded-xl flex items-center justify-center animate-pulse-glow icon-bounce transition-transform group-hover:rotate-12">
+                    <span class="text-2xl">🛡️</span>
                 </div>
                 <div>
-                    <h1 class="text-xl font-bold">PayGuard</h1>
+                    <h1 class="text-xl font-bold text-gradient">PayGuard</h1>
                     <p class="text-xs text-gray-400">Intelligent Escrow on Solana</p>
                 </div>
             </div>
-            <button class="bg-gradient-to-r from-green-500 to-emerald-600 px-4 py-2 rounded-lg font-medium text-sm">
+            <button class="btn-glow bg-gradient-to-r from-green-500 to-emerald-600 px-5 py-2.5 rounded-xl font-medium text-sm">
                 Connect Wallet
             </button>
         </div>
     </header>
 
     <!-- Hero Section -->
-    <section class="max-w-6xl mx-auto px-6 py-16 text-center">
-        <h2 class="text-4xl md:text-5xl font-bold mb-4">
-            Trustless Escrow with
-            <span class="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-500">AI Arbitration</span>
+    <section class="max-w-6xl mx-auto px-6 py-20 text-center relative">
+        <div class="animate-fade-in-up opacity-0">
+            <div class="inline-block mb-6 px-4 py-2 bg-green-500/10 border border-green-500/30 rounded-full text-green-400 text-sm animate-pulse">
+                🚀 Built for Colosseum Agent Hackathon
+            </div>
+        </div>
+        <h2 class="text-5xl md:text-6xl font-bold mb-6 animate-fade-in-up opacity-0 delay-100">
+            Trustless Escrow with<br>
+            <span class="text-gradient">AI Arbitration</span>
         </h2>
-        <p class="text-gray-400 text-lg max-w-2xl mx-auto mb-8">
+        <p class="text-gray-400 text-xl max-w-2xl mx-auto mb-10 animate-fade-in-up opacity-0 delay-200">
             Freelancers get paid. Clients get protected. AI resolves disputes fairly.
             All on Solana. No middlemen.
         </p>
-        <div class="flex justify-center gap-4">
-            <button class="bg-gradient-to-r from-green-500 to-emerald-600 px-6 py-3 rounded-lg font-bold">
-                Create Contract
+        <div class="flex justify-center gap-4 animate-fade-in-up opacity-0 delay-300">
+            <button class="btn-glow bg-gradient-to-r from-green-500 to-emerald-600 px-8 py-4 rounded-xl font-bold text-lg">
+                ✨ Create Contract
             </button>
-            <button class="border border-gray-600 px-6 py-3 rounded-lg font-medium hover:border-green-500 transition">
-                View Demo
+            <button class="btn-glow border border-gray-600 hover:border-green-500 px-8 py-4 rounded-xl font-medium text-lg bg-gray-800/50 backdrop-blur">
+                ▶️ View Demo
             </button>
+        </div>
+        
+        <!-- Animated Stats Row -->
+        <div class="flex justify-center gap-12 mt-16 animate-fade-in-up opacity-0 delay-400">
+            <div class="text-center stat-counter cursor-pointer">
+                <p class="text-3xl font-bold text-green-400" data-count="0">0%</p>
+                <p class="text-sm text-gray-500">Platform Fee</p>
+            </div>
+            <div class="text-center stat-counter cursor-pointer">
+                <p class="text-3xl font-bold text-green-400">&lt;1s</p>
+                <p class="text-sm text-gray-500">Settlement Time</p>
+            </div>
+            <div class="text-center stat-counter cursor-pointer">
+                <p class="text-3xl font-bold text-green-400">24/7</p>
+                <p class="text-sm text-gray-500">AI Arbitration</p>
+            </div>
         </div>
     </section>
 
     <!-- How It Works -->
-    <section class="max-w-6xl mx-auto px-6 py-12">
-        <h3 class="text-2xl font-bold text-center mb-12">How It Works</h3>
+    <section class="max-w-6xl mx-auto px-6 py-16 reveal">
+        <h3 class="text-3xl font-bold text-center mb-4">How It Works</h3>
+        <p class="text-gray-400 text-center mb-12 max-w-xl mx-auto">Four simple steps to secure, trustless payments</p>
         <div class="grid md:grid-cols-4 gap-6">
-            <div class="bg-gray-800/50 rounded-xl p-6 text-center">
-                <div class="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <span class="text-2xl">📝</span>
+            <div class="card-hover glow-border bg-gray-800/50 backdrop-blur rounded-2xl p-6 text-center opacity-0 animate-fade-in-up delay-100">
+                <div class="w-16 h-16 bg-gradient-to-br from-green-500/20 to-emerald-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4 icon-bounce">
+                    <span class="text-3xl">📝</span>
                 </div>
-                <h4 class="font-semibold mb-2">1. Create Contract</h4>
+                <div class="text-green-400 text-sm font-medium mb-2">Step 1</div>
+                <h4 class="font-semibold mb-2 text-lg">Create Contract</h4>
                 <p class="text-sm text-gray-400">Client defines milestones and locks USDC in escrow PDA</p>
             </div>
-            <div class="bg-gray-800/50 rounded-xl p-6 text-center">
-                <div class="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <span class="text-2xl">🔨</span>
+            <div class="card-hover glow-border bg-gray-800/50 backdrop-blur rounded-2xl p-6 text-center opacity-0 animate-fade-in-up delay-200">
+                <div class="w-16 h-16 bg-gradient-to-br from-blue-500/20 to-cyan-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4 icon-bounce">
+                    <span class="text-3xl">🔨</span>
                 </div>
-                <h4 class="font-semibold mb-2">2. Freelancer Delivers</h4>
+                <div class="text-blue-400 text-sm font-medium mb-2">Step 2</div>
+                <h4 class="font-semibold mb-2 text-lg">Freelancer Delivers</h4>
                 <p class="text-sm text-gray-400">Work completed, proof submitted on-chain</p>
             </div>
-            <div class="bg-gray-800/50 rounded-xl p-6 text-center">
-                <div class="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <span class="text-2xl">✅</span>
+            <div class="card-hover glow-border bg-gray-800/50 backdrop-blur rounded-2xl p-6 text-center opacity-0 animate-fade-in-up delay-300">
+                <div class="w-16 h-16 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4 icon-bounce">
+                    <span class="text-3xl">✅</span>
                 </div>
-                <h4 class="font-semibold mb-2">3. Approve or Dispute</h4>
+                <div class="text-purple-400 text-sm font-medium mb-2">Step 3</div>
+                <h4 class="font-semibold mb-2 text-lg">Approve or Dispute</h4>
                 <p class="text-sm text-gray-400">Client approves → instant release. Dispute → AI arbitration</p>
             </div>
-            <div class="bg-gray-800/50 rounded-xl p-6 text-center">
-                <div class="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <span class="text-2xl">⚖️</span>
+            <div class="card-hover glow-border bg-gray-800/50 backdrop-blur rounded-2xl p-6 text-center opacity-0 animate-fade-in-up delay-400">
+                <div class="w-16 h-16 bg-gradient-to-br from-yellow-500/20 to-orange-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4 icon-bounce">
+                    <span class="text-3xl">⚖️</span>
                 </div>
-                <h4 class="font-semibold mb-2">4. AI Arbitration</h4>
+                <div class="text-yellow-400 text-sm font-medium mb-2">Step 4</div>
+                <h4 class="font-semibold mb-2 text-lg">AI Arbitration</h4>
                 <p class="text-sm text-gray-400">Fair, verifiable decisions. Split or full release.</p>
             </div>
         </div>
     </section>
 
     <!-- Live Demo Section -->
-    <section class="max-w-4xl mx-auto px-6 py-12">
-        <h3 class="text-2xl font-bold text-center mb-8">Live Demo: AI Arbitration</h3>
+    <section class="max-w-4xl mx-auto px-6 py-16 reveal">
+        <h3 class="text-3xl font-bold text-center mb-4">Live Demo: AI Arbitration</h3>
+        <p class="text-gray-400 text-center mb-8">Watch the AI resolve a real dispute scenario</p>
         
-        <div class="bg-gray-800/50 rounded-xl p-6 mb-6">
-            <div class="flex items-center justify-between mb-4">
-                <h4 class="font-semibold">Contract #001: Website Development</h4>
-                <span class="px-3 py-1 bg-yellow-500/20 text-yellow-400 rounded-full text-sm">Disputed</span>
+        <div class="card-hover bg-gray-800/50 backdrop-blur border border-gray-700/50 rounded-2xl p-8 mb-6">
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
+                        📄
+                    </div>
+                    <div>
+                        <h4 class="font-semibold">Contract #001: Website Development</h4>
+                        <p class="text-sm text-gray-500">Created 3 days ago</p>
+                    </div>
+                </div>
+                <span class="px-4 py-1.5 bg-yellow-500/20 text-yellow-400 rounded-full text-sm font-medium animate-pulse">
+                    ⚡ Disputed
+                </span>
             </div>
             
             <div class="grid md:grid-cols-2 gap-4 mb-6">
-                <div class="bg-gray-900 rounded-lg p-4">
-                    <p class="text-xs text-gray-500 mb-1">Milestone</p>
-                    <p class="text-sm">Mobile-responsive landing page</p>
-                    <p class="text-lg font-bold text-green-400 mt-2">500 USDC</p>
+                <div class="bg-gray-900/80 rounded-xl p-5 border border-gray-700/50">
+                    <p class="text-xs text-gray-500 mb-2 uppercase tracking-wider">Milestone</p>
+                    <p class="text-sm mb-3">Mobile-responsive landing page</p>
+                    <p class="text-2xl font-bold text-green-400">500 USDC</p>
                 </div>
-                <div class="bg-gray-900 rounded-lg p-4">
-                    <p class="text-xs text-gray-500 mb-1">Dispute Reason</p>
-                    <p class="text-sm">"Mobile layout broken on iPhone. Buttons not clickable."</p>
+                <div class="bg-gray-900/80 rounded-xl p-5 border border-red-500/20">
+                    <p class="text-xs text-gray-500 mb-2 uppercase tracking-wider">Dispute Reason</p>
+                    <p class="text-sm text-red-300">"Mobile layout broken on iPhone. Buttons not clickable."</p>
                 </div>
             </div>
 
-            <div class="border-t border-gray-700 pt-4">
-                <div class="flex items-center gap-2 mb-3">
-                    <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                    <span class="text-sm text-gray-400">AI Arbitrator analyzing...</span>
+            <div class="border-t border-gray-700/50 pt-6">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="relative">
+                        <div class="w-3 h-3 bg-green-400 rounded-full animate-ping absolute"></div>
+                        <div class="w-3 h-3 bg-green-400 rounded-full relative"></div>
+                    </div>
+                    <span class="text-sm text-gray-400" id="ai-status">AI Arbitrator analyzing evidence...</span>
                 </div>
                 
-                <div id="ai-result" class="bg-gray-900 rounded-lg p-4">
-                    <p class="text-xs text-gray-500 mb-2">AI Decision</p>
-                    <div class="flex items-center gap-2 mb-2">
-                        <span class="text-lg">⚖️</span>
-                        <span class="font-bold text-yellow-400">SPLIT: 70% Freelancer / 30% Client</span>
+                <div id="ai-result" class="bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl p-6 border border-green-500/30">
+                    <div class="flex items-center gap-2 mb-4">
+                        <span class="text-2xl">🤖</span>
+                        <p class="text-xs text-gray-500 uppercase tracking-wider">AI Decision</p>
                     </div>
-                    <p class="text-sm text-gray-300 mb-3">
-                        <strong>Reasoning:</strong> Desktop version fully functional. Mobile issues are real but fixable.
-                        Core work delivered, minor responsive bugs don't justify full refund.
-                    </p>
-                    <div class="flex gap-4 text-sm">
-                        <div>
-                            <span class="text-gray-500">Freelancer receives:</span>
-                            <span class="text-green-400 font-bold ml-1">350 USDC</span>
-                        </div>
-                        <div>
-                            <span class="text-gray-500">Client refund:</span>
-                            <span class="text-blue-400 font-bold ml-1">150 USDC</span>
-                        </div>
+                    <div class="flex items-center gap-3 mb-4">
+                        <span class="text-3xl">⚖️</span>
+                        <span class="text-xl font-bold text-gradient">SPLIT: 70% Freelancer / 30% Client</span>
                     </div>
-                    <div class="mt-3 pt-3 border-t border-gray-800">
-                        <p class="text-xs text-gray-500">
-                            🔐 Reasoning hash committed via SOLPRISM before execution:
-                            <code class="text-green-400/60 ml-1">c370a6f5...2c32f4f0</code>
+                    <div class="bg-gray-800/50 rounded-lg p-4 mb-4">
+                        <p class="text-sm text-gray-300">
+                            <strong class="text-white">Reasoning:</strong> Desktop version fully functional and meets all specifications. 
+                            Mobile issues are real but fixable with minor CSS adjustments. Core work delivered (~85%), 
+                            responsive bugs don't justify full refund. Recommending proportional split.
                         </p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div class="bg-green-500/10 border border-green-500/30 rounded-lg p-4 text-center">
+                            <span class="text-gray-400 text-sm">Freelancer receives</span>
+                            <p class="text-2xl font-bold text-green-400">350 USDC</p>
+                        </div>
+                        <div class="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 text-center">
+                            <span class="text-gray-400 text-sm">Client refund</span>
+                            <p class="text-2xl font-bold text-blue-400">150 USDC</p>
+                        </div>
+                    </div>
+                    <div class="pt-4 border-t border-gray-700/50">
+                        <div class="flex items-center gap-2 text-xs text-gray-500">
+                            <span>🔐</span>
+                            <span>Reasoning hash committed via SOLPRISM:</span>
+                            <code class="text-green-400/80 bg-gray-900 px-2 py-1 rounded font-mono">c370a6f5...2c32f4f0</code>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="text-center text-gray-500 text-sm">
-            ↑ Real AI arbitration flow. Decision is verifiable on-chain.
-        </div>
+        <p class="text-center text-gray-500 text-sm flex items-center justify-center gap-2">
+            <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+            Real AI arbitration flow. Decision is verifiable on-chain.
+        </p>
     </section>
 
     <!-- Features -->
-    <section class="max-w-6xl mx-auto px-6 py-12">
-        <h3 class="text-2xl font-bold text-center mb-8">Why PayGuard?</h3>
+    <section class="max-w-6xl mx-auto px-6 py-16 reveal">
+        <h3 class="text-3xl font-bold text-center mb-4">Why PayGuard?</h3>
+        <p class="text-gray-400 text-center mb-12 max-w-xl mx-auto">The future of trustless payments is here</p>
         <div class="grid md:grid-cols-3 gap-6">
-            <div class="bg-gray-800/30 border border-gray-700 rounded-xl p-6">
-                <span class="text-3xl mb-4 block">🤖</span>
-                <h4 class="font-semibold mb-2">AI-Powered Arbitration</h4>
-                <p class="text-sm text-gray-400">No human bottleneck. Disputes resolved in minutes, not weeks. Fair splits based on evidence.</p>
+            <div class="card-hover glow-border bg-gray-800/30 backdrop-blur border border-gray-700/50 rounded-2xl p-8">
+                <div class="w-14 h-14 bg-gradient-to-br from-green-500/20 to-emerald-500/10 rounded-xl flex items-center justify-center mb-6 icon-bounce">
+                    <span class="text-3xl">🤖</span>
+                </div>
+                <h4 class="font-semibold mb-3 text-xl">AI-Powered Arbitration</h4>
+                <p class="text-gray-400">No human bottleneck. Disputes resolved in minutes, not weeks. Fair splits based on evidence analysis.</p>
             </div>
-            <div class="bg-gray-800/30 border border-gray-700 rounded-xl p-6">
-                <span class="text-3xl mb-4 block">🔐</span>
-                <h4 class="font-semibold mb-2">Verifiable Decisions</h4>
-                <p class="text-sm text-gray-400">SOLPRISM integration. Reasoning committed on-chain BEFORE execution. Provably fair.</p>
+            <div class="card-hover glow-border bg-gray-800/30 backdrop-blur border border-gray-700/50 rounded-2xl p-8">
+                <div class="w-14 h-14 bg-gradient-to-br from-purple-500/20 to-pink-500/10 rounded-xl flex items-center justify-center mb-6 icon-bounce">
+                    <span class="text-3xl">🔐</span>
+                </div>
+                <h4 class="font-semibold mb-3 text-xl">Verifiable Decisions</h4>
+                <p class="text-gray-400">SOLPRISM integration. Reasoning committed on-chain BEFORE execution. Provably fair and tamper-proof.</p>
             </div>
-            <div class="bg-gray-800/30 border border-gray-700 rounded-xl p-6">
-                <span class="text-3xl mb-4 block">⚡</span>
-                <h4 class="font-semibold mb-2">Instant Settlements</h4>
-                <p class="text-sm text-gray-400">Solana speed. USDC stability. Funds released in seconds, not days.</p>
+            <div class="card-hover glow-border bg-gray-800/30 backdrop-blur border border-gray-700/50 rounded-2xl p-8">
+                <div class="w-14 h-14 bg-gradient-to-br from-yellow-500/20 to-orange-500/10 rounded-xl flex items-center justify-center mb-6 icon-bounce">
+                    <span class="text-3xl">⚡</span>
+                </div>
+                <h4 class="font-semibold mb-3 text-xl">Instant Settlements</h4>
+                <p class="text-gray-400">Solana speed. USDC stability. Funds released in seconds, not days. No intermediaries.</p>
             </div>
         </div>
     </section>
 
     <!-- Stats -->
-    <section class="max-w-4xl mx-auto px-6 py-12">
-        <div class="bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/30 rounded-xl p-8">
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-                <div>
-                    <p class="text-3xl font-bold text-green-400">1,850+</p>
-                    <p class="text-sm text-gray-400">Lines of Code</p>
+    <section class="max-w-5xl mx-auto px-6 py-16 reveal">
+        <div class="bg-gradient-to-r from-green-500/10 via-emerald-500/5 to-green-500/10 border border-green-500/30 rounded-3xl p-10 backdrop-blur animate-pulse-glow">
+            <h3 class="text-2xl font-bold text-center mb-8">Built in 72 Hours</h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+                <div class="stat-counter cursor-pointer">
+                    <p class="text-4xl font-bold text-gradient counter" data-target="1850">0</p>
+                    <p class="text-sm text-gray-400 mt-2">Lines of Code</p>
                 </div>
-                <div>
-                    <p class="text-3xl font-bold text-green-400">7</p>
-                    <p class="text-sm text-gray-400">Commits</p>
+                <div class="stat-counter cursor-pointer">
+                    <p class="text-4xl font-bold text-gradient counter" data-target="9">0</p>
+                    <p class="text-sm text-gray-400 mt-2">Commits</p>
                 </div>
-                <div>
-                    <p class="text-3xl font-bold text-green-400">400+</p>
-                    <p class="text-sm text-gray-400">Anchor LOC</p>
+                <div class="stat-counter cursor-pointer">
+                    <p class="text-4xl font-bold text-gradient counter" data-target="400">0</p>
+                    <p class="text-sm text-gray-400 mt-2">Anchor LOC</p>
                 </div>
-                <div>
-                    <p class="text-3xl font-bold text-green-400">3</p>
-                    <p class="text-sm text-gray-400">Integrations</p>
+                <div class="stat-counter cursor-pointer">
+                    <p class="text-4xl font-bold text-gradient counter" data-target="3">0</p>
+                    <p class="text-sm text-gray-400 mt-2">Integrations</p>
                 </div>
             </div>
         </div>
     </section>
 
     <!-- CTA -->
-    <section class="max-w-4xl mx-auto px-6 py-16 text-center">
-        <h3 class="text-2xl font-bold mb-4">Built for the Colosseum Agent Hackathon</h3>
-        <p class="text-gray-400 mb-6">By <span class="text-green-400">major-agent</span> 🎖️</p>
-        <div class="flex justify-center gap-4">
+    <section class="max-w-4xl mx-auto px-6 py-20 text-center reveal">
+        <div class="inline-block mb-6 animate-float">
+            <span class="text-6xl">🎖️</span>
+        </div>
+        <h3 class="text-3xl font-bold mb-4">Built for the Colosseum Agent Hackathon</h3>
+        <p class="text-gray-400 mb-8 text-lg">By <span class="text-gradient font-bold">major-agent</span></p>
+        <div class="flex justify-center gap-4 flex-wrap">
             <a href="https://github.com/Rafacrypto61/payguard" target="_blank" 
-               class="bg-gray-800 border border-gray-700 px-6 py-3 rounded-lg font-medium hover:border-green-500 transition">
+               class="btn-glow bg-gray-800 border border-gray-700 px-8 py-4 rounded-xl font-medium inline-flex items-center gap-2">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
                 GitHub Repo
             </a>
             <a href="https://colosseum.com/agent-hackathon/projects/payguard" target="_blank"
-               class="bg-gradient-to-r from-green-500 to-emerald-600 px-6 py-3 rounded-lg font-bold">
-                Vote on Colosseum
+               class="btn-glow bg-gradient-to-r from-green-500 to-emerald-600 px-8 py-4 rounded-xl font-bold inline-flex items-center gap-2">
+                🗳️ Vote on Colosseum
             </a>
         </div>
     </section>
 
-    <!-- Modal -->
-    <div id="modal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50">
-        <div class="bg-gray-800 rounded-xl p-6 max-w-md mx-4">
-            <h3 id="modal-title" class="text-xl font-bold mb-4"></h3>
-            <div id="modal-content" class="text-gray-300"></div>
-            <button onclick="closeModal()" class="mt-4 w-full bg-green-500 hover:bg-green-600 py-2 rounded-lg font-medium">Close</button>
-        </div>
-    </div>
-
     <!-- Footer -->
-    <footer class="border-t border-gray-800 px-6 py-8">
-        <div class="max-w-6xl mx-auto text-center text-gray-500 text-sm">
-            <p>Powered by Solana • AI Arbitration by Claude • Verifiable via SOLPRISM</p>
-            <p class="mt-2">© 2026 PayGuard • MIT License</p>
+    <footer class="border-t border-gray-800/50 px-6 py-10 backdrop-blur-sm">
+        <div class="max-w-6xl mx-auto text-center">
+            <div class="flex justify-center gap-6 mb-6">
+                <span class="text-gray-600 hover:text-green-400 transition-colors cursor-pointer">Solana</span>
+                <span class="text-gray-600">•</span>
+                <span class="text-gray-600 hover:text-green-400 transition-colors cursor-pointer">SOLPRISM</span>
+                <span class="text-gray-600">•</span>
+                <span class="text-gray-600 hover:text-green-400 transition-colors cursor-pointer">Claude AI</span>
+            </div>
+            <p class="text-gray-500 text-sm">© 2026 PayGuard • MIT License</p>
         </div>
     </footer>
 
+    <!-- Modal -->
+    <div id="modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-2xl p-8 max-w-md mx-4 transform scale-95 opacity-0 transition-all duration-300" id="modal-content-wrapper">
+            <h3 id="modal-title" class="text-2xl font-bold mb-4"></h3>
+            <div id="modal-content" class="text-gray-300"></div>
+            <button onclick="closeModal()" class="mt-6 w-full btn-glow bg-green-500 hover:bg-green-600 py-3 rounded-xl font-medium">Close</button>
+        </div>
+    </div>
+
     <script>
+        // Particle system
+        function createParticle() {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            particle.style.left = Math.random() * 100 + '%';
+            particle.style.top = Math.random() * 100 + '%';
+            particle.style.opacity = Math.random() * 0.5 + 0.2;
+            particle.style.transform = `scale(${Math.random() * 2 + 0.5})`;
+            
+            const duration = Math.random() * 20 + 10;
+            particle.style.animation = `float ${duration}s ease-in-out infinite`;
+            particle.style.animationDelay = `-${Math.random() * duration}s`;
+            
+            document.getElementById('particles').appendChild(particle);
+        }
+        for (let i = 0; i < 30; i++) createParticle();
+
+        // Counter animation
+        function animateCounters() {
+            document.querySelectorAll('.counter').forEach(counter => {
+                const target = parseInt(counter.dataset.target);
+                const duration = 2000;
+                const step = target / (duration / 16);
+                let current = 0;
+                
+                const timer = setInterval(() => {
+                    current += step;
+                    if (current >= target) {
+                        counter.textContent = target + (target > 100 ? '+' : '');
+                        clearInterval(timer);
+                    } else {
+                        counter.textContent = Math.floor(current);
+                    }
+                }, 16);
+            });
+        }
+
+        // Scroll reveal
+        function revealOnScroll() {
+            document.querySelectorAll('.reveal').forEach(el => {
+                const top = el.getBoundingClientRect().top;
+                if (top < window.innerHeight - 100) {
+                    el.classList.add('active');
+                }
+            });
+        }
+        window.addEventListener('scroll', revealOnScroll);
+        revealOnScroll();
+
+        // Trigger counter animation when stats section is visible
+        const statsObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    animateCounters();
+                    statsObserver.disconnect();
+                }
+            });
+        }, { threshold: 0.5 });
+        document.querySelector('.counter')?.closest('section') && 
+            statsObserver.observe(document.querySelector('.counter').closest('section'));
+
+        // AI typing effect
+        const aiStatuses = [
+            'AI Arbitrator analyzing evidence...',
+            'Reviewing contract specifications...',
+            'Comparing deliverables to requirements...',
+            'Calculating fair compensation...',
+            'Decision ready ✓'
+        ];
+        let statusIndex = 0;
+        setInterval(() => {
+            statusIndex = (statusIndex + 1) % aiStatuses.length;
+            document.getElementById('ai-status').textContent = aiStatuses[statusIndex];
+        }, 2500);
+
+        // Modal functions
         function showModal(title, content) {
             document.getElementById('modal-title').textContent = title;
             document.getElementById('modal-content').innerHTML = content;
             document.getElementById('modal').classList.remove('hidden');
             document.getElementById('modal').classList.add('flex');
+            setTimeout(() => {
+                document.getElementById('modal-content-wrapper').style.transform = 'scale(1)';
+                document.getElementById('modal-content-wrapper').style.opacity = '1';
+            }, 10);
         }
         
         function closeModal() {
-            document.getElementById('modal').classList.add('hidden');
-            document.getElementById('modal').classList.remove('flex');
+            document.getElementById('modal-content-wrapper').style.transform = 'scale(0.95)';
+            document.getElementById('modal-content-wrapper').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('modal').classList.add('hidden');
+                document.getElementById('modal').classList.remove('flex');
+            }, 300);
         }
 
-        // Connect Wallet button
+        // Button handlers
         document.querySelectorAll('button').forEach(btn => {
             if (btn.textContent.includes('Connect Wallet')) {
                 btn.onclick = () => showModal('Connect Wallet', `
                     <p class="mb-4">Select a wallet to connect:</p>
-                    <div class="space-y-2">
-                        <button onclick="simulateConnect('Phantom')" class="w-full bg-purple-600 hover:bg-purple-700 py-3 rounded-lg flex items-center justify-center gap-2">
+                    <div class="space-y-3">
+                        <button onclick="simulateConnect('Phantom')" class="w-full btn-glow bg-purple-600 hover:bg-purple-700 py-4 rounded-xl flex items-center justify-center gap-3 text-lg">
                             👻 Phantom
                         </button>
-                        <button onclick="simulateConnect('Solflare')" class="w-full bg-orange-600 hover:bg-orange-700 py-3 rounded-lg flex items-center justify-center gap-2">
+                        <button onclick="simulateConnect('Solflare')" class="w-full btn-glow bg-orange-600 hover:bg-orange-700 py-4 rounded-xl flex items-center justify-center gap-3 text-lg">
                             🌞 Solflare
                         </button>
-                        <button onclick="simulateConnect('Backpack')" class="w-full bg-blue-600 hover:bg-blue-700 py-3 rounded-lg flex items-center justify-center gap-2">
+                        <button onclick="simulateConnect('Backpack')" class="w-full btn-glow bg-blue-600 hover:bg-blue-700 py-4 rounded-xl flex items-center justify-center gap-3 text-lg">
                             🎒 Backpack
                         </button>
                     </div>
-                    <p class="text-xs text-gray-500 mt-4">Demo mode - no real connection</p>
+                    <p class="text-xs text-gray-500 mt-4 text-center">Demo mode - no real connection</p>
                 `);
             }
             if (btn.textContent.includes('Create Contract')) {
@@ -263,68 +610,68 @@
                     <div class="space-y-4">
                         <div>
                             <label class="text-sm text-gray-400">Freelancer Wallet</label>
-                            <input type="text" placeholder="Enter Solana address..." class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 mt-1">
+                            <input type="text" placeholder="Enter Solana address..." class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 mt-1 focus:border-green-500 focus:outline-none transition-colors">
                         </div>
                         <div>
                             <label class="text-sm text-gray-400">Amount (USDC)</label>
-                            <input type="number" placeholder="500" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 mt-1">
+                            <input type="number" placeholder="500" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 mt-1 focus:border-green-500 focus:outline-none transition-colors">
                         </div>
                         <div>
                             <label class="text-sm text-gray-400">Milestone Description</label>
-                            <textarea placeholder="Describe the deliverable..." class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 mt-1 h-20"></textarea>
+                            <textarea placeholder="Describe the deliverable..." class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 mt-1 h-24 focus:border-green-500 focus:outline-none transition-colors resize-none"></textarea>
                         </div>
-                        <button onclick="simulateCreate()" class="w-full bg-green-500 hover:bg-green-600 py-3 rounded-lg font-bold">
+                        <button onclick="simulateCreate()" class="w-full btn-glow bg-gradient-to-r from-green-500 to-emerald-600 py-4 rounded-xl font-bold text-lg">
                             🔐 Create & Lock Funds
                         </button>
                     </div>
-                    <p class="text-xs text-gray-500 mt-4">Demo mode - connect wallet on devnet to test</p>
                 `);
             }
             if (btn.textContent.includes('View Demo')) {
                 btn.onclick = () => {
-                    document.getElementById('ai-result').scrollIntoView({ behavior: 'smooth' });
+                    document.getElementById('ai-result').scrollIntoView({ behavior: 'smooth', block: 'center' });
                 };
             }
         });
 
         function simulateConnect(wallet) {
             showModal('Wallet Connected! ✅', `
-                <p class="text-green-400 font-bold mb-2">${wallet} connected successfully!</p>
-                <p class="text-sm text-gray-400 mb-4">Address: 7xKX...9fGh (demo)</p>
-                <p>In production, this would:</p>
-                <ul class="list-disc list-inside text-sm text-gray-300 mt-2">
-                    <li>Connect to your real wallet</li>
-                    <li>Show your USDC balance</li>
-                    <li>Enable contract creation</li>
-                </ul>
+                <div class="text-center">
+                    <div class="text-6xl mb-4 animate-bounce-in">🎉</div>
+                    <p class="text-green-400 font-bold text-xl mb-2">${wallet} connected!</p>
+                    <p class="text-sm text-gray-400 mb-6">Address: 7xKX...9fGh (demo)</p>
+                    <div class="bg-gray-900 rounded-xl p-4 text-left">
+                        <p class="text-sm text-gray-400 mb-2">In production, this would:</p>
+                        <ul class="text-sm text-gray-300 space-y-1">
+                            <li>✓ Connect to your real wallet</li>
+                            <li>✓ Show your USDC balance</li>
+                            <li>✓ Enable contract creation</li>
+                        </ul>
+                    </div>
+                </div>
             `);
         }
 
         function simulateCreate() {
             showModal('Contract Created! 🎉', `
                 <div class="text-center">
-                    <div class="text-4xl mb-4">✅</div>
-                    <p class="text-green-400 font-bold mb-2">Escrow Created Successfully</p>
-                    <p class="text-sm text-gray-400 mb-4">Contract ID: PG-001-DEMO</p>
-                    <div class="bg-gray-900 rounded-lg p-4 text-left text-sm">
-                        <p><span class="text-gray-500">Status:</span> <span class="text-yellow-400">Awaiting Delivery</span></p>
-                        <p><span class="text-gray-500">Amount:</span> <span class="text-green-400">500 USDC</span></p>
-                        <p><span class="text-gray-500">PDA:</span> <span class="text-blue-400">5xYz...demo</span></p>
+                    <div class="text-6xl mb-4 animate-bounce-in">✅</div>
+                    <p class="text-green-400 font-bold text-xl mb-2">Escrow Created Successfully</p>
+                    <p class="text-sm text-gray-400 mb-6">Contract ID: PG-001-DEMO</p>
+                    <div class="bg-gray-900 rounded-xl p-5 text-left space-y-2">
+                        <p><span class="text-gray-500">Status:</span> <span class="text-yellow-400">⏳ Awaiting Delivery</span></p>
+                        <p><span class="text-gray-500">Amount:</span> <span class="text-green-400 font-bold">500 USDC</span></p>
+                        <p><span class="text-gray-500">PDA:</span> <span class="text-blue-400 font-mono text-sm">5xYz...demo</span></p>
                     </div>
                 </div>
             `);
         }
 
-        // Animate the AI thinking effect
-        let dots = 0;
-        setInterval(() => {
-            const el = document.querySelector('.animate-pulse');
-            if (el) {
-                dots = (dots + 1) % 4;
-                el.parentElement.querySelector('span:last-child').textContent = 
-                    'AI Arbitrator analyzing' + '.'.repeat(dots);
-            }
-        }, 500);
+        // Initialize animations after small delay
+        setTimeout(() => {
+            document.querySelectorAll('.opacity-0').forEach((el, i) => {
+                setTimeout(() => el.classList.remove('opacity-0'), i * 100);
+            });
+        }, 100);
     </script>
 </body>
 </html>
