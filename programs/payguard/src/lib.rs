@@ -26,6 +26,9 @@ pub mod payguard {
         contract.client = ctx.accounts.client.key();
         contract.freelancer = ctx.accounts.freelancer.key();
         contract.token_mint = ctx.accounts.token_mint.key();
+        // Arbitrator is set to the PayGuard oracle by default
+        // In production, this would be a multisig or DAO-controlled address
+        contract.arbitrator = ctx.accounts.arbitrator.key();
         contract.total_amount = total_amount;
         contract.released_amount = 0;
         contract.milestones = milestones;
@@ -279,6 +282,10 @@ pub struct CreateContract<'info> {
     /// CHECK: Freelancer pubkey, validated by business logic
     pub freelancer: AccountInfo<'info>,
     
+    /// CHECK: Authorized arbitrator for dispute resolution
+    /// This should be PayGuard's oracle or a trusted third party
+    pub arbitrator: AccountInfo<'info>,
+    
     /// CHECK: Token mint for payment
     pub token_mint: AccountInfo<'info>,
     
@@ -342,7 +349,10 @@ pub struct ResolveDispute<'info> {
     #[account(mut)]
     pub contract: Account<'info, Contract>,
     
-    /// Arbitration oracle/authority
+    /// Arbitration oracle/authority - MUST be the authorized arbitrator
+    #[account(
+        constraint = arbitrator.key() == contract.arbitrator @ PayGuardError::Unauthorized
+    )]
     pub arbitrator: Signer<'info>,
     
     #[account(mut)]
@@ -382,6 +392,8 @@ pub struct Contract {
     pub client: Pubkey,
     pub freelancer: Pubkey,
     pub token_mint: Pubkey,
+    /// Authorized arbitrator for dispute resolution
+    pub arbitrator: Pubkey,
     pub total_amount: u64,
     pub released_amount: u64,
     #[max_len(10)]
