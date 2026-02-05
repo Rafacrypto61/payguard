@@ -8,6 +8,8 @@ dist/
 build/
 target/
 .anchor/
+.next/
+out/
 
 # Environment files - NEVER COMMIT
 .env

@@ -1,41 +1,68 @@
 "use client";
 
-import { FC, ReactNode, useMemo } from "react";
-import {
-  ConnectionProvider,
-  WalletProvider,
-} from "@solana/wallet-adapter-react";
-import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
-import {
-  PhantomWalletAdapter,
-  SolflareWalletAdapter,
-  BackpackWalletAdapter,
-} from "@solana/wallet-adapter-wallets";
-import { clusterApiUrl } from "@solana/web3.js";
+import { createContext, useContext, useState, ReactNode } from "react";
 
-import "@solana/wallet-adapter-react-ui/styles.css";
-
-interface Props {
-  children: ReactNode;
+interface WalletContextType {
+  connected: boolean;
+  publicKey: string | null;
+  connect: () => void;
+  disconnect: () => void;
 }
 
-export const WalletContextProvider: FC<Props> = ({ children }) => {
-  const endpoint = useMemo(() => clusterApiUrl("devnet"), []);
+const WalletContext = createContext<WalletContextType>({
+  connected: false,
+  publicKey: null,
+  connect: () => {},
+  disconnect: () => {},
+});
 
-  const wallets = useMemo(
-    () => [
-      new PhantomWalletAdapter(),
-      new SolflareWalletAdapter(),
-      new BackpackWalletAdapter(),
-    ],
-    []
-  );
+export function useWallet() {
+  return useContext(WalletContext);
+}
+
+export function WalletMultiButton() {
+  const { connected, publicKey, connect, disconnect } = useWallet();
+
+  if (connected && publicKey) {
+    return (
+      <button
+        onClick={disconnect}
+        className="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+      >
+        <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+        {publicKey.slice(0, 4)}...{publicKey.slice(-4)}
+      </button>
+    );
+  }
 
   return (
-    <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider>{children}</WalletModalProvider>
-      </WalletProvider>
-    </ConnectionProvider>
+    <button
+      onClick={connect}
+      className="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+    >
+      Connect Wallet
+    </button>
   );
-};
+}
+
+export function WalletContextProvider({ children }: { children: ReactNode }) {
+  const [connected, setConnected] = useState(false);
+  const [publicKey, setPublicKey] = useState<string | null>(null);
+
+  const connect = () => {
+    // Simulate wallet connection
+    setConnected(true);
+    setPublicKey("7xKXm9HgLpqR2nWvF5tYkBcJdZqN3mNpL8sK2kLqP9fG");
+  };
+
+  const disconnect = () => {
+    setConnected(false);
+    setPublicKey(null);
+  };
+
+  return (
+    <WalletContext.Provider value={{ connected, publicKey, connect, disconnect }}>
+      {children}
+    </WalletContext.Provider>
+  );
+}
