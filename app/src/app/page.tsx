@@ -1,34 +1,29 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useWallet, WalletMultiButton } from "@/components/WalletProvider";
 
 interface Milestone {
   id: string;
   description: string;
   amount: number;
-  status: "pending" | "submitted" | "approved" | "disputed" | "resolved";
-  proof?: string;
+  status: "pending" | "submitted" | "approved" | "disputed";
 }
 
 interface Contract {
   id: string;
   title: string;
-  description: string;
   freelancer: string;
-  client: string;
   milestones: Milestone[];
   totalAmount: number;
   releasedAmount: number;
-  status: "active" | "completed" | "disputed" | "cancelled";
+  status: "active" | "completed" | "disputed";
   createdAt: Date;
 }
 
 interface Dispute {
   id: string;
-  contractId: string;
   contractTitle: string;
-  milestoneIndex: number;
   milestoneDescription: string;
   amount: number;
   clientReason: string;
@@ -40,22 +35,18 @@ interface Dispute {
     reasoning: string;
     confidence: number;
   };
-  createdAt: Date;
 }
 
-// Demo data
 const DEMO_CONTRACTS: Contract[] = [
   {
-    id: "demo-1",
+    id: "1",
     title: "DeFi Dashboard Development",
-    description: "Build a portfolio tracking dashboard with real-time prices",
     freelancer: "7xKX...9fGh",
-    client: "3mNp...2kLq",
     milestones: [
-      { id: "m1", description: "UI/UX Design & Wireframes", amount: 500, status: "approved" },
-      { id: "m2", description: "Frontend Implementation", amount: 1000, status: "approved" },
-      { id: "m3", description: "API Integration", amount: 800, status: "submitted", proof: "https://github.com/demo/commit/abc123" },
-      { id: "m4", description: "Testing & Deployment", amount: 700, status: "pending" },
+      { id: "m1", description: "UI/UX Design", amount: 500, status: "approved" },
+      { id: "m2", description: "Frontend Dev", amount: 1000, status: "approved" },
+      { id: "m3", description: "API Integration", amount: 800, status: "submitted" },
+      { id: "m4", description: "Testing & Deploy", amount: 700, status: "pending" },
     ],
     totalAmount: 3000,
     releasedAmount: 1500,
@@ -66,97 +57,58 @@ const DEMO_CONTRACTS: Contract[] = [
 
 const DEMO_DISPUTES: Dispute[] = [
   {
-    id: "disp-1",
-    contractId: "demo-1",
-    contractTitle: "NFT Marketplace - Milestone 3",
-    milestoneIndex: 2,
+    id: "d1",
+    contractTitle: "NFT Marketplace",
     milestoneDescription: "Smart Contract Development",
     amount: 2000,
-    clientReason: "Contract has critical security vulnerability. Reentrancy attack possible in withdraw function.",
-    freelancerResponse: "The vulnerability was in a test file, not production code. Main contract is secure and audited.",
+    clientReason: "Contract has security vulnerability in withdraw function.",
+    freelancerResponse: "Vulnerability is in test file only, production is secure.",
     status: "resolved",
     aiDecision: {
       type: "split",
       splitPercentage: 70,
-      reasoning: `## Analysis Summary
+      reasoning: `## Analysis
 
-**Requirements Review:**
-- Smart contract for NFT marketplace ✓
-- ERC-721 compliance ✓
-- Secure withdraw function ⚠️
-
-**Evidence Examined:**
-1. Client's security report showing reentrancy pattern
-2. Freelancer's code showing the pattern was in test/mock files
-3. Production contract audit from Solana FM
+**Evidence Reviewed:**
+- Client's security report
+- Production contract audit
+- Test file analysis
 
 **Findings:**
-The reentrancy pattern exists in \`test/MockVault.sol\` which is NOT deployed to production. The main \`Marketplace.sol\` contract uses proper checks-effects-interactions pattern.
+The reentrancy pattern exists only in test/MockVault.sol (NOT production). Main contract uses proper checks-effects-interactions.
 
-However, having vulnerable patterns in test files is poor practice and could confuse future developers.
-
-**Decision:** 70/30 split favoring freelancer. Core deliverable is secure, but code quality concerns warrant partial reduction.`,
+**Decision:** 70/30 split. Core deliverable is secure, but test code quality concerns warrant reduction.`,
       confidence: 0.87,
     },
-    createdAt: new Date("2026-01-30"),
   },
 ];
 
 export default function Home() {
-  const { connected, publicKey } = useWallet();
+  const { connected, publicKey, connect } = useWallet();
   const [activeTab, setActiveTab] = useState<"create" | "contracts" | "disputes">("create");
   const [contracts, setContracts] = useState<Contract[]>(DEMO_CONTRACTS);
   const [disputes, setDisputes] = useState<Dispute[]>(DEMO_DISPUTES);
-  const [newMilestones, setNewMilestones] = useState<{ description: string; amount: string }[]>([
-    { description: "", amount: "" }
-  ]);
-  const [formData, setFormData] = useState({
-    title: "",
-    freelancer: "",
-    description: "",
-  });
+  const [milestones, setMilestones] = useState([{ description: "", amount: "" }]);
+  const [formData, setFormData] = useState({ title: "", freelancer: "", description: "" });
   const [isCreating, setIsCreating] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [analyzingDispute, setAnalyzingDispute] = useState<string | null>(null);
-  const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
+  const [analyzingId, setAnalyzingId] = useState<string | null>(null);
 
-  const addMilestone = () => {
-    setNewMilestones([...newMilestones, { description: "", amount: "" }]);
-  };
-
-  const removeMilestone = (index: number) => {
-    setNewMilestones(newMilestones.filter((_, i) => i !== index));
-  };
-
-  const updateMilestone = (index: number, field: "description" | "amount", value: string) => {
-    const updated = [...newMilestones];
-    updated[index][field] = value;
-    setNewMilestones(updated);
-  };
-
-  const totalAmount = newMilestones.reduce((sum, m) => sum + (parseFloat(m.amount) || 0), 0);
+  const totalAmount = milestones.reduce((sum, m) => sum + (parseFloat(m.amount) || 0), 0);
 
   const createContract = async () => {
-    if (!formData.title || !formData.freelancer || newMilestones.some(m => !m.description || !m.amount)) {
-      alert("Please fill all fields");
-      return;
-    }
-
+    if (!formData.title || !formData.freelancer) return;
     setIsCreating(true);
+    await new Promise(r => setTimeout(r, 2000));
     
-    // Simulate blockchain transaction
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
     const newContract: Contract = {
-      id: `contract-${Date.now()}`,
+      id: Date.now().toString(),
       title: formData.title,
-      description: formData.description,
       freelancer: formData.freelancer.slice(0, 4) + "..." + formData.freelancer.slice(-4),
-      client: publicKey ? publicKey.slice(0, 4) + "..." + publicKey.slice(-4) : "You",
-      milestones: newMilestones.map((m, i) => ({
-        id: `m-${i}`,
+      milestones: milestones.map((m, i) => ({
+        id: `m${i}`,
         description: m.description,
-        amount: parseFloat(m.amount),
+        amount: parseFloat(m.amount) || 0,
         status: "pending" as const,
       })),
       totalAmount,
@@ -164,30 +116,22 @@ export default function Home() {
       status: "active",
       createdAt: new Date(),
     };
-
+    
     setContracts([newContract, ...contracts]);
     setIsCreating(false);
     setShowSuccess(true);
-    
-    // Reset form
     setFormData({ title: "", freelancer: "", description: "" });
-    setNewMilestones([{ description: "", amount: "" }]);
-
-    setTimeout(() => {
-      setShowSuccess(false);
-      setActiveTab("contracts");
-    }, 2000);
+    setMilestones([{ description: "", amount: "" }]);
+    setTimeout(() => { setShowSuccess(false); setActiveTab("contracts"); }, 2000);
   };
 
-  const approveMilestone = async (contractId: string, milestoneId: string) => {
+  const approveMilestone = (contractId: string, milestoneId: string) => {
     setContracts(contracts.map(c => {
       if (c.id === contractId) {
         const milestone = c.milestones.find(m => m.id === milestoneId);
         return {
           ...c,
-          milestones: c.milestones.map(m => 
-            m.id === milestoneId ? { ...m, status: "approved" as const } : m
-          ),
+          milestones: c.milestones.map(m => m.id === milestoneId ? { ...m, status: "approved" as const } : m),
           releasedAmount: c.releasedAmount + (milestone?.amount || 0),
         };
       }
@@ -195,280 +139,234 @@ export default function Home() {
     }));
   };
 
-  const raiseDispute = async (contractId: string, milestoneId: string) => {
-    const contract = contracts.find(c => c.id === contractId);
-    const milestone = contract?.milestones.find(m => m.id === milestoneId);
-    
-    if (!contract || !milestone) return;
-
-    const newDispute: Dispute = {
-      id: `disp-${Date.now()}`,
-      contractId,
-      contractTitle: contract.title,
-      milestoneIndex: contract.milestones.indexOf(milestone),
-      milestoneDescription: milestone.description,
-      amount: milestone.amount,
-      clientReason: "Deliverable does not meet specifications",
-      status: "pending",
-      createdAt: new Date(),
-    };
-
-    setDisputes([newDispute, ...disputes]);
-    
-    // Update milestone status
-    setContracts(contracts.map(c => {
-      if (c.id === contractId) {
-        return {
-          ...c,
-          milestones: c.milestones.map(m => 
-            m.id === milestoneId ? { ...m, status: "disputed" as const } : m
-          ),
-          status: "disputed" as const,
-        };
-      }
-      return c;
-    }));
-
-    setActiveTab("disputes");
-  };
-
-  const simulateAIAnalysis = async (disputeId: string) => {
-    setAnalyzingDispute(disputeId);
-
-    // Simulate AI thinking
-    await new Promise(resolve => setTimeout(resolve, 3000));
-
-    setDisputes(disputes.map(d => {
-      if (d.id === disputeId) {
-        return {
-          ...d,
-          status: "resolved" as const,
-          aiDecision: {
-            type: "split" as const,
-            splitPercentage: 65,
-            reasoning: `## AI Arbitration Analysis
-
-**Contract:** ${d.contractTitle}
-**Milestone:** ${d.milestoneDescription}
-**Amount in Dispute:** ${d.amount} USDC
-
-### Evidence Review
-
-**Client's Claim:**
-"${d.clientReason}"
-
-**Freelancer's Response:**
-"${d.freelancerResponse || 'Work was delivered as specified.'}"
-
-### Analysis
-
-After reviewing the available evidence:
-
-1. ✅ Core functionality was delivered
-2. ⚠️ Some quality concerns identified
-3. ✅ Deadline was met
-
-### Decision
-
-**Split: 65% to Freelancer / 35% to Client**
-
-The work substantially meets requirements but quality issues justify a partial reduction. Both parties share some responsibility for unclear specifications.
-
-*Confidence: 82%*`,
-            confidence: 0.82,
-          },
-        };
-      }
-      return d;
-    }));
-
-    setAnalyzingDispute(null);
+  const simulateAI = async (disputeId: string) => {
+    setAnalyzingId(disputeId);
+    await new Promise(r => setTimeout(r, 3000));
+    setDisputes(disputes.map(d => d.id === disputeId ? {
+      ...d,
+      status: "resolved" as const,
+      aiDecision: {
+        type: "split" as const,
+        splitPercentage: 65,
+        reasoning: `## AI Analysis\n\n**Decision:** 65/35 split in favor of freelancer.\n\nCore requirements were met. Minor quality issues identified.`,
+        confidence: 0.82,
+      },
+    } : d));
+    setAnalyzingId(null);
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white">
+    <main className="min-h-screen bg-pattern">
       {/* Success Modal */}
       {showSuccess && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-2xl p-8 text-center max-w-md mx-4 animate-pulse">
-            <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-4xl">✓</span>
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="glass-card p-10 text-center animate-fade-in glow">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center mx-auto mb-6 animate-pulse-glow">
+              <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+              </svg>
             </div>
             <h2 className="text-2xl font-bold mb-2">Contract Created!</h2>
-            <p className="text-gray-400">Funds locked in escrow successfully</p>
-            <p className="text-green-400 font-mono text-sm mt-4">TX: 5xK2m...9fGhL</p>
+            <p className="text-gray-400">Funds locked in escrow</p>
+            <p className="text-green-400 font-mono text-sm mt-4 opacity-60">TX: 5xK2m...9fGhL</p>
           </div>
         </div>
       )}
 
       {/* Header */}
-      <header className="border-b border-gray-800 px-6 py-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-emerald-600 rounded-lg flex items-center justify-center">
-              <span className="text-xl">🛡️</span>
+      <header className="border-b border-white/5 backdrop-blur-xl bg-black/20 sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center shadow-lg shadow-green-500/20">
+              <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
             </div>
             <div>
-              <h1 className="text-xl font-bold">PayGuard</h1>
-              <p className="text-xs text-gray-400">Intelligent Escrow on Solana</p>
+              <h1 className="text-xl font-bold gradient-text">PayGuard</h1>
+              <p className="text-xs text-gray-500">Intelligent Escrow on Solana</p>
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded">DEMO MODE</span>
+            <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+              DEMO
+            </span>
             <WalletMultiButton />
           </div>
         </div>
       </header>
 
       {/* Navigation */}
-      <nav className="border-b border-gray-800 px-6">
-        <div className="max-w-6xl mx-auto flex gap-1">
-          {[
-            { id: "create", label: "Create Contract", icon: "📝" },
-            { id: "contracts", label: `My Contracts (${contracts.length})`, icon: "📋" },
-            { id: "disputes", label: `Disputes (${disputes.filter(d => d.status !== "resolved").length})`, icon: "⚖️" },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as typeof activeTab)}
-              className={`px-4 py-3 text-sm font-medium transition-colors ${
-                activeTab === tab.id
-                  ? "text-green-400 border-b-2 border-green-400"
-                  : "text-gray-400 hover:text-white"
-              }`}
-            >
-              {tab.icon} {tab.label}
-            </button>
-          ))}
+      <nav className="border-b border-white/5 bg-black/10 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="flex gap-1">
+            {[
+              { id: "create", label: "Create Contract", icon: "M12 4v16m8-8H4" },
+              { id: "contracts", label: `Contracts (${contracts.length})`, icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
+              { id: "disputes", label: `Disputes (${disputes.filter(d => d.status !== "resolved").length})`, icon: "M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                className={`flex items-center gap-2 px-5 py-4 text-sm font-medium transition-all border-b-2 ${
+                  activeTab === tab.id
+                    ? "text-green-400 border-green-400 bg-green-400/5"
+                    : "text-gray-500 border-transparent hover:text-white hover:bg-white/5"
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={tab.icon} />
+                </svg>
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
       </nav>
 
       {/* Main Content */}
-      <div className="max-w-6xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-6 py-10">
         {!connected ? (
-          <div className="text-center py-20">
-            <div className="w-20 h-20 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-6">
-              <span className="text-4xl">🔐</span>
+          <div className="text-center py-24 animate-fade-in">
+            <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center mx-auto mb-8 border border-white/10">
+              <svg className="w-12 h-12 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
             </div>
-            <h2 className="text-2xl font-bold mb-2">Connect Your Wallet</h2>
-            <p className="text-gray-400 mb-6">Connect your Solana wallet to create or manage escrow contracts</p>
-            <WalletMultiButton />
-            <p className="text-sm text-yellow-400 mt-4">💡 This is a demo - no real transactions will occur</p>
+            <h2 className="text-3xl font-bold mb-3">Connect Your Wallet</h2>
+            <p className="text-gray-500 mb-8 max-w-md mx-auto">
+              Connect your Solana wallet to create escrow contracts and manage payments securely
+            </p>
+            <button onClick={connect} className="btn-primary text-lg px-8 py-4">
+              Connect Wallet
+            </button>
+            <p className="text-amber-400/80 text-sm mt-6">
+              This is a demo - no real transactions
+            </p>
           </div>
         ) : activeTab === "create" ? (
-          <div className="max-w-2xl mx-auto">
-            <h2 className="text-2xl font-bold mb-6">Create Escrow Contract</h2>
+          <div className="max-w-2xl mx-auto animate-fade-in">
+            <div className="mb-8">
+              <h2 className="text-3xl font-bold mb-2">Create Escrow Contract</h2>
+              <p className="text-gray-500">Define milestones and fund your escrow securely</p>
+            </div>
             
-            {/* Contract Details */}
-            <div className="bg-gray-800/50 rounded-xl p-6 mb-6">
-              <h3 className="text-lg font-semibold mb-4">Contract Details</h3>
+            <div className="glass-card p-8 mb-6">
+              <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
+                <span className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400 text-sm">1</span>
+                Contract Details
+              </h3>
               
-              <div className="space-y-4">
+              <div className="space-y-5">
                 <div>
-                  <label className="block text-sm text-gray-400 mb-1">Contract Title</label>
+                  <label className="block text-sm text-gray-400 mb-2">Contract Title</label>
                   <input
                     type="text"
                     placeholder="e.g., Website Development Project"
                     value={formData.title}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-green-500"
+                    className="input-modern"
                   />
                 </div>
                 
                 <div>
-                  <label className="block text-sm text-gray-400 mb-1">Freelancer Wallet Address</label>
+                  <label className="block text-sm text-gray-400 mb-2">Freelancer Wallet</label>
                   <input
                     type="text"
                     placeholder="Enter Solana wallet address"
                     value={formData.freelancer}
                     onChange={(e) => setFormData({ ...formData, freelancer: e.target.value })}
-                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 font-mono text-sm focus:outline-none focus:border-green-500"
+                    className="input-modern font-mono"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm text-gray-400 mb-1">Description</label>
+                  <label className="block text-sm text-gray-400 mb-2">Description</label>
                   <textarea
                     placeholder="Describe the work to be done..."
                     rows={3}
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-green-500"
+                    className="input-modern resize-none"
                   />
                 </div>
               </div>
             </div>
 
-            {/* Milestones */}
-            <div className="bg-gray-800/50 rounded-xl p-6 mb-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold">Milestones</h3>
+            <div className="glass-card p-8 mb-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                  <span className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400 text-sm">2</span>
+                  Milestones
+                </h3>
                 <button
-                  onClick={addMilestone}
-                  className="text-sm text-green-400 hover:text-green-300"
+                  onClick={() => setMilestones([...milestones, { description: "", amount: "" }])}
+                  className="text-sm text-green-400 hover:text-green-300 flex items-center gap-1"
                 >
-                  + Add Milestone
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Milestone
                 </button>
               </div>
 
               <div className="space-y-4">
-                {newMilestones.map((milestone, index) => (
-                  <div key={index} className="bg-gray-900 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-sm font-medium text-gray-400">
-                        Milestone {index + 1}
-                      </span>
-                      {newMilestones.length > 1 && (
+                {milestones.map((milestone, index) => (
+                  <div key={index} className="bg-white/5 rounded-xl p-5 border border-white/5">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-sm font-medium text-gray-400">Milestone {index + 1}</span>
+                      {milestones.length > 1 && (
                         <button
-                          onClick={() => removeMilestone(index)}
+                          onClick={() => setMilestones(milestones.filter((_, i) => i !== index))}
                           className="text-red-400 hover:text-red-300 text-sm"
                         >
                           Remove
                         </button>
                       )}
                     </div>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-3 gap-4">
                       <div className="col-span-2">
                         <input
                           type="text"
-                          placeholder="Milestone description"
+                          placeholder="What needs to be delivered?"
                           value={milestone.description}
-                          onChange={(e) => updateMilestone(index, "description", e.target.value)}
-                          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-500"
+                          onChange={(e) => {
+                            const updated = [...milestones];
+                            updated[index].description = e.target.value;
+                            setMilestones(updated);
+                          }}
+                          className="input-modern text-sm"
                         />
                       </div>
-                      <div>
-                        <div className="relative">
-                          <input
-                            type="number"
-                            placeholder="0.00"
-                            value={milestone.amount}
-                            onChange={(e) => updateMilestone(index, "amount", e.target.value)}
-                            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm pr-16 focus:outline-none focus:border-green-500"
-                          />
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">
-                            USDC
-                          </span>
-                        </div>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          placeholder="0"
+                          value={milestone.amount}
+                          onChange={(e) => {
+                            const updated = [...milestones];
+                            updated[index].amount = e.target.value;
+                            setMilestones(updated);
+                          }}
+                          className="input-modern text-sm pr-16"
+                        />
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">USDC</span>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
 
-              <div className="mt-4 pt-4 border-t border-gray-700 flex items-center justify-between">
+              <div className="mt-6 pt-6 border-t border-white/5 flex items-center justify-between">
                 <span className="text-gray-400">Total Contract Value</span>
-                <span className="text-xl font-bold text-green-400">
-                  {totalAmount.toFixed(2)} USDC
-                </span>
+                <span className="text-2xl font-bold gradient-text">{totalAmount.toLocaleString()} USDC</span>
               </div>
             </div>
 
-            {/* Create Button */}
             <button 
               onClick={createContract}
-              disabled={isCreating}
-              className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 text-white font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2"
+              disabled={isCreating || !formData.title || !formData.freelancer}
+              className="w-full btn-primary py-5 text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
             >
               {isCreating ? (
                 <>
@@ -476,104 +374,98 @@ The work substantially meets requirements but quality issues justify a partial r
                   Creating Contract...
                 </>
               ) : (
-                "Create & Fund Escrow"
+                <>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                  Create & Fund Escrow
+                </>
               )}
             </button>
-
-            <p className="text-center text-gray-500 text-sm mt-4">
-              💡 Demo mode: No real funds will be transferred
-            </p>
           </div>
         ) : activeTab === "contracts" ? (
-          <div>
-            <h2 className="text-2xl font-bold mb-6">My Contracts</h2>
-            
+          <div className="animate-fade-in">
+            <div className="mb-8">
+              <h2 className="text-3xl font-bold mb-2">My Contracts</h2>
+              <p className="text-gray-500">Manage your active escrow agreements</p>
+            </div>
+
             {contracts.length === 0 ? (
-              <div className="text-center py-16 text-gray-500">
-                <p className="text-6xl mb-4">📋</p>
-                <p>No contracts yet. Create your first escrow!</p>
+              <div className="text-center py-20 glass-card">
+                <div className="text-6xl mb-4 opacity-20">📋</div>
+                <p className="text-gray-500">No contracts yet</p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 {contracts.map((contract) => (
-                  <div key={contract.id} className="bg-gray-800/50 rounded-xl p-6">
-                    <div className="flex items-start justify-between mb-4">
+                  <div key={contract.id} className="glass-card glass-card-hover p-8">
+                    <div className="flex items-start justify-between mb-6">
                       <div>
-                        <h3 className="font-semibold text-lg">{contract.title}</h3>
-                        <p className="text-sm text-gray-400">
-                          Created {contract.createdAt.toLocaleDateString()} • Freelancer: {contract.freelancer}
+                        <h3 className="text-xl font-semibold mb-1">{contract.title}</h3>
+                        <p className="text-sm text-gray-500">
+                          Freelancer: <span className="font-mono text-gray-400">{contract.freelancer}</span>
                         </p>
                       </div>
-                      <span className={`px-3 py-1 rounded-full text-sm ${
-                        contract.status === "active" ? "bg-green-500/20 text-green-400" :
-                        contract.status === "disputed" ? "bg-yellow-500/20 text-yellow-400" :
-                        contract.status === "completed" ? "bg-blue-500/20 text-blue-400" :
-                        "bg-gray-500/20 text-gray-400"
+                      <span className={`px-4 py-1.5 rounded-full text-sm font-medium ${
+                        contract.status === "active" ? "status-active" :
+                        contract.status === "disputed" ? "status-disputed" : "status-pending"
                       }`}>
                         {contract.status.charAt(0).toUpperCase() + contract.status.slice(1)}
                       </span>
                     </div>
-                    
-                    {/* Progress Bar */}
-                    <div className="mb-4">
-                      <div className="flex justify-between text-sm mb-1">
-                        <span className="text-gray-400">Progress</span>
-                        <span className="text-green-400">{contract.releasedAmount} / {contract.totalAmount} USDC</span>
+
+                    <div className="mb-6">
+                      <div className="flex justify-between text-sm mb-2">
+                        <span className="text-gray-500">Progress</span>
+                        <span className="text-green-400 font-medium">
+                          {contract.releasedAmount.toLocaleString()} / {contract.totalAmount.toLocaleString()} USDC
+                        </span>
                       </div>
-                      <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                      <div className="progress-bar">
                         <div 
-                          className="h-full bg-gradient-to-r from-green-500 to-emerald-400 transition-all duration-500"
+                          className="progress-fill"
                           style={{ width: `${(contract.releasedAmount / contract.totalAmount) * 100}%` }}
                         ></div>
                       </div>
                     </div>
 
-                    {/* Milestones */}
-                    <div className="space-y-2 mb-4">
-                      {contract.milestones.map((milestone, idx) => (
-                        <div key={milestone.id} className="flex items-center justify-between bg-gray-900 rounded-lg px-4 py-3">
-                          <div className="flex items-center gap-3">
-                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${
-                              milestone.status === "approved" ? "bg-green-500" :
-                              milestone.status === "submitted" ? "bg-yellow-500" :
-                              milestone.status === "disputed" ? "bg-red-500" :
-                              "bg-gray-600"
+                    <div className="space-y-3">
+                      {contract.milestones.map((m, idx) => (
+                        <div key={m.id} className="flex items-center justify-between bg-white/5 rounded-xl px-5 py-4">
+                          <div className="flex items-center gap-4">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                              m.status === "approved" ? "bg-green-500 text-white" :
+                              m.status === "submitted" ? "bg-amber-500 text-white" :
+                              "bg-gray-700 text-gray-400"
                             }`}>
-                              {milestone.status === "approved" ? "✓" : idx + 1}
-                            </span>
+                              {m.status === "approved" ? "✓" : idx + 1}
+                            </div>
                             <div>
-                              <p className="text-sm">{milestone.description}</p>
-                              <p className="text-xs text-gray-500">{milestone.amount} USDC</p>
+                              <p className="font-medium">{m.description}</p>
+                              <p className="text-sm text-gray-500">{m.amount.toLocaleString()} USDC</p>
                             </div>
                           </div>
                           
-                          {milestone.status === "submitted" && (
+                          {m.status === "submitted" && (
                             <div className="flex gap-2">
                               <button 
-                                onClick={() => approveMilestone(contract.id, milestone.id)}
-                                className="px-3 py-1 bg-green-600 hover:bg-green-500 rounded text-xs transition-colors"
+                                onClick={() => approveMilestone(contract.id, m.id)}
+                                className="btn-primary py-2 px-4 text-sm"
                               >
                                 Approve
                               </button>
-                              <button 
-                                onClick={() => raiseDispute(contract.id, milestone.id)}
-                                className="px-3 py-1 bg-red-600 hover:bg-red-500 rounded text-xs transition-colors"
-                              >
+                              <button className="btn-secondary py-2 px-4 text-sm text-red-400 border-red-500/30 hover:bg-red-500/10">
                                 Dispute
                               </button>
                             </div>
                           )}
                           
-                          {milestone.status === "pending" && (
-                            <span className="text-xs text-gray-500">Awaiting submission</span>
+                          {m.status === "approved" && (
+                            <span className="text-green-400 text-sm font-medium">Released ✓</span>
                           )}
                           
-                          {milestone.status === "approved" && (
-                            <span className="text-xs text-green-400">✓ Released</span>
-                          )}
-                          
-                          {milestone.status === "disputed" && (
-                            <span className="text-xs text-yellow-400">⚖️ In Dispute</span>
+                          {m.status === "pending" && (
+                            <span className="text-gray-500 text-sm">Awaiting submission</span>
                           )}
                         </div>
                       ))}
@@ -584,102 +476,94 @@ The work substantially meets requirements but quality issues justify a partial r
             )}
           </div>
         ) : (
-          <div>
-            <h2 className="text-2xl font-bold mb-6">Disputes & AI Arbitration</h2>
-            
+          <div className="animate-fade-in">
+            <div className="mb-8">
+              <h2 className="text-3xl font-bold mb-2">AI Arbitration</h2>
+              <p className="text-gray-500">Disputes resolved by AI in minutes, not weeks</p>
+            </div>
+
             {disputes.length === 0 ? (
-              <div className="text-center py-16 text-gray-500">
-                <p className="text-6xl mb-4">⚖️</p>
-                <p>No disputes. All contracts running smoothly!</p>
+              <div className="text-center py-20 glass-card">
+                <div className="text-6xl mb-4 opacity-20">⚖️</div>
+                <p className="text-gray-500">No disputes - all contracts running smoothly!</p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 {disputes.map((dispute) => (
-                  <div key={dispute.id} className="bg-gray-800/50 rounded-xl p-6">
-                    <div className="flex items-start justify-between mb-4">
+                  <div key={dispute.id} className="glass-card p-8">
+                    <div className="flex items-start justify-between mb-6">
                       <div>
-                        <h3 className="font-semibold text-lg">{dispute.contractTitle}</h3>
-                        <p className="text-sm text-gray-400">
-                          Milestone: {dispute.milestoneDescription} • {dispute.amount} USDC
-                        </p>
+                        <h3 className="text-xl font-semibold mb-1">{dispute.contractTitle}</h3>
+                        <p className="text-sm text-gray-500">{dispute.milestoneDescription} • {dispute.amount.toLocaleString()} USDC</p>
                       </div>
-                      <span className={`px-3 py-1 rounded-full text-sm ${
-                        dispute.status === "resolved" ? "bg-green-500/20 text-green-400" :
-                        dispute.status === "analyzing" ? "bg-blue-500/20 text-blue-400" :
-                        "bg-yellow-500/20 text-yellow-400"
+                      <span className={`px-4 py-1.5 rounded-full text-sm font-medium ${
+                        dispute.status === "resolved" ? "status-active" : "status-pending"
                       }`}>
-                        {dispute.status === "resolved" ? "Resolved" :
-                         dispute.status === "analyzing" ? "AI Analyzing..." :
-                         "Pending Review"}
+                        {dispute.status === "resolved" ? "Resolved" : "Pending"}
                       </span>
                     </div>
 
-                    <div className="space-y-3 mb-4">
-                      <div className="bg-gray-900 rounded-lg p-4">
-                        <p className="text-xs text-red-400 mb-1">👤 Client's Dispute Reason:</p>
-                        <p className="text-sm">{dispute.clientReason}</p>
+                    <div className="grid md:grid-cols-2 gap-4 mb-6">
+                      <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-5">
+                        <p className="text-xs text-red-400 mb-2 font-medium">CLIENT'S CLAIM</p>
+                        <p className="text-sm text-gray-300">{dispute.clientReason}</p>
                       </div>
-                      
-                      {dispute.freelancerResponse && (
-                        <div className="bg-gray-900 rounded-lg p-4">
-                          <p className="text-xs text-blue-400 mb-1">👨‍💻 Freelancer's Response:</p>
-                          <p className="text-sm">{dispute.freelancerResponse}</p>
-                        </div>
-                      )}
+                      <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-5">
+                        <p className="text-xs text-blue-400 mb-2 font-medium">FREELANCER'S RESPONSE</p>
+                        <p className="text-sm text-gray-300">{dispute.freelancerResponse || "Awaiting response..."}</p>
+                      </div>
                     </div>
 
                     {dispute.status === "pending" && (
                       <button 
-                        onClick={() => simulateAIAnalysis(dispute.id)}
-                        className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                        onClick={() => simulateAI(dispute.id)}
+                        className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 py-4 rounded-xl font-semibold transition-all flex items-center justify-center gap-3"
                       >
-                        <span>🤖</span> Request AI Arbitration
+                        <span className="text-xl">🤖</span>
+                        Request AI Arbitration
                       </button>
                     )}
 
-                    {analyzingDispute === dispute.id && (
-                      <div className="bg-gray-900 rounded-lg p-6 text-center">
-                        <div className="w-12 h-12 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mx-auto mb-4"></div>
-                        <p className="text-purple-400 font-medium">AI Arbitrator Analyzing...</p>
-                        <p className="text-sm text-gray-500 mt-1">Reviewing evidence and contract terms</p>
+                    {analyzingId === dispute.id && (
+                      <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-8 text-center">
+                        <div className="w-16 h-16 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mx-auto mb-4"></div>
+                        <p className="text-purple-400 font-semibold text-lg">AI Analyzing Evidence...</p>
+                        <p className="text-sm text-gray-500 mt-1">Reviewing contract terms and submissions</p>
                       </div>
                     )}
 
                     {dispute.status === "resolved" && dispute.aiDecision && (
-                      <div className="bg-gradient-to-br from-purple-900/30 to-pink-900/30 rounded-lg p-6 border border-purple-500/30">
-                        <div className="flex items-center gap-2 mb-4">
-                          <span className="text-2xl">🤖</span>
+                      <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-xl p-6">
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                            <span className="text-xl">🤖</span>
+                          </div>
                           <div>
                             <p className="font-semibold text-purple-400">AI Arbitration Decision</p>
-                            <p className="text-xs text-gray-400">Confidence: {(dispute.aiDecision.confidence * 100).toFixed(0)}%</p>
+                            <p className="text-xs text-gray-500">Confidence: {(dispute.aiDecision.confidence * 100).toFixed(0)}%</p>
                           </div>
                         </div>
                         
-                        <div className="bg-gray-900 rounded-lg p-4 mb-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm text-gray-400">Decision:</span>
-                            <span className="font-bold text-lg">
-                              {dispute.aiDecision.type === "split" 
-                                ? `${dispute.aiDecision.splitPercentage}% / ${100 - (dispute.aiDecision.splitPercentage || 0)}% Split`
-                                : dispute.aiDecision.type === "favor_freelancer"
-                                ? "100% to Freelancer"
-                                : "100% to Client"
-                              }
-                            </span>
-                          </div>
+                        <div className="bg-black/30 rounded-xl p-6 mb-4">
+                          <p className="text-lg font-bold mb-4">
+                            {dispute.aiDecision.type === "split" 
+                              ? `${dispute.aiDecision.splitPercentage}% / ${100 - (dispute.aiDecision.splitPercentage || 0)}% Split`
+                              : dispute.aiDecision.type === "favor_freelancer" ? "100% to Freelancer" : "100% to Client"
+                            }
+                          </p>
                           
                           {dispute.aiDecision.type === "split" && (
-                            <div className="flex gap-2 mt-3">
-                              <div className="flex-1 bg-green-500/20 rounded p-2 text-center">
-                                <p className="text-xs text-gray-400">Freelancer</p>
-                                <p className="font-bold text-green-400">
-                                  {((dispute.amount * (dispute.aiDecision.splitPercentage || 0)) / 100).toFixed(0)} USDC
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 text-center">
+                                <p className="text-xs text-gray-500 mb-1">Freelancer</p>
+                                <p className="text-xl font-bold text-green-400">
+                                  ${((dispute.amount * (dispute.aiDecision.splitPercentage || 0)) / 100).toLocaleString()}
                                 </p>
                               </div>
-                              <div className="flex-1 bg-blue-500/20 rounded p-2 text-center">
-                                <p className="text-xs text-gray-400">Client Refund</p>
-                                <p className="font-bold text-blue-400">
-                                  {((dispute.amount * (100 - (dispute.aiDecision.splitPercentage || 0))) / 100).toFixed(0)} USDC
+                              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 text-center">
+                                <p className="text-xs text-gray-500 mb-1">Client Refund</p>
+                                <p className="text-xl font-bold text-blue-400">
+                                  ${((dispute.amount * (100 - (dispute.aiDecision.splitPercentage || 0))) / 100).toLocaleString()}
                                 </p>
                               </div>
                             </div>
@@ -687,10 +571,13 @@ The work substantially meets requirements but quality issues justify a partial r
                         </div>
                         
                         <details className="group">
-                          <summary className="cursor-pointer text-sm text-purple-400 hover:text-purple-300">
-                            View Full AI Reasoning →
+                          <summary className="cursor-pointer text-sm text-purple-400 hover:text-purple-300 flex items-center gap-2">
+                            <svg className="w-4 h-4 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                            View AI Reasoning
                           </summary>
-                          <div className="mt-3 bg-gray-900 rounded-lg p-4 text-sm text-gray-300 whitespace-pre-wrap font-mono">
+                          <div className="mt-4 bg-black/30 rounded-lg p-5 text-sm text-gray-300 whitespace-pre-wrap font-mono">
                             {dispute.aiDecision.reasoning}
                           </div>
                         </details>
@@ -705,13 +592,27 @@ The work substantially meets requirements but quality issues justify a partial r
       </div>
 
       {/* Footer */}
-      <footer className="border-t border-gray-800 px-6 py-8 mt-auto">
-        <div className="max-w-6xl mx-auto text-center text-gray-500 text-sm">
-          <p>Built by <span className="text-green-400">major-agent</span> 🎖️ for the Colosseum Agent Hackathon</p>
-          <p className="mt-1">Powered by Solana • AI Arbitration by Claude</p>
-          <div className="flex justify-center gap-4 mt-4">
-            <a href="https://github.com/Rafacrypto61/payguard" target="_blank" className="text-gray-400 hover:text-white">GitHub</a>
-            <a href="https://colosseum.com/agent-hackathon/projects/payguard" target="_blank" className="text-gray-400 hover:text-white">Vote on Colosseum</a>
+      <footer className="border-t border-white/5 mt-20">
+        <div className="max-w-7xl mx-auto px-6 py-12">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+              </div>
+              <div>
+                <p className="font-semibold">PayGuard</p>
+                <p className="text-xs text-gray-500">Intelligent Escrow on Solana</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-6 text-sm text-gray-500">
+              <a href="https://github.com/Rafacrypto61/payguard" target="_blank" className="hover:text-white transition-colors">GitHub</a>
+              <a href="https://colosseum.com/agent-hackathon/projects/payguard" target="_blank" className="hover:text-white transition-colors">Vote on Colosseum</a>
+            </div>
+            <p className="text-sm text-gray-600">
+              Built by <span className="text-green-400">major-agent</span> for Colosseum Hackathon
+            </p>
           </div>
         </div>
       </footer>
