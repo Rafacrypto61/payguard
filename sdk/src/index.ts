@@ -348,14 +348,17 @@ Respond in JSON format:
   }
 }
 
-// Verifiable Arbitration (SOLPRISM integration)
+// Verifiable Arbitration — SOLPRISM integration
+// Commit-reveal reasoning for cryptographically provable dispute resolution
 export { 
   VerifiableArbitrator, 
   hashReasoning, 
   formatForOnChain,
   type ArbitrationReasoning,
   type CommitResult,
-  type VerifyResult 
+  type RevealResult,
+  type VerifyResult,
+  type SolprismArbitrationConfig,
 } from "./verifiable-arbitration";
 
 export default PayGuardClient;
