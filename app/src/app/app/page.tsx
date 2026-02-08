@@ -2,6 +2,13 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useWallet, usePayGuard, WalletMultiButton, PAYGUARD_PROGRAM_ID } from "@/components/WalletProvider";
+import { PublicKey } from "@solana/web3.js";
+
+// Lamports to SOL conversion
+const LAMPORTS_PER_SOL = 1_000_000_000;
+const toSol = (lamports: number) => lamports / LAMPORTS_PER_SOL;
+const toLamports = (sol: number) => Math.floor(sol * LAMPORTS_PER_SOL);
 
 interface LocalContract {
   id: number;
@@ -16,15 +23,17 @@ interface LocalContract {
   pda: string;
 }
 
-const PAYGUARD_PROGRAM_ID = "7xGH3qHVx..."; // Placeholder
-
 export default function AppPage() {
-  const [connected, setConnected] = useState(false);
+  const { connected, publicKey } = useWallet();
+  const { createContract, fundContract, approveMilestone, getContractPDA } = usePayGuard();
+  
   const [activeTab, setActiveTab] = useState<"create" | "contracts" | "disputes">("create");
   const [contracts, setContracts] = useState<LocalContract[]>([]);
   const [milestones, setMilestones] = useState([{ description: "", amount: "" }]);
   const [formData, setFormData] = useState({ title: "", freelancer: "", arbitrator: "", description: "" });
   const [isCreating, setIsCreating] = useState(false);
+  const [isFunding, setIsFunding] = useState<number | null>(null);
+  const [isApproving, setIsApproving] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nextContractId, setNextContractId] = useState(1);
@@ -50,13 +59,8 @@ export default function AppPage() {
     }
   }, [contracts]);
 
-  const handleConnect = () => {
-    // Simulated wallet connect
-    setConnected(true);
-  };
-
   const handleCreateContract = async () => {
-    if (!connected) {
+    if (!connected || !publicKey) {
       setError("Please connect your wallet first");
       return;
     }
@@ -66,18 +70,42 @@ export default function AppPage() {
       return;
     }
 
+    // Validate addresses
+    let freelancerPubkey: PublicKey;
+    let arbitratorPubkey: PublicKey;
+    
+    try {
+      freelancerPubkey = new PublicKey(formData.freelancer);
+      arbitratorPubkey = formData.arbitrator 
+        ? new PublicKey(formData.arbitrator)
+        : publicKey;
+    } catch {
+      setError("Invalid wallet address format");
+      return;
+    }
+
     setIsCreating(true);
     setError(null);
 
     try {
-      // Simulate contract creation
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const milestoneAmounts = milestones.map(m => toLamports(parseFloat(m.amount) || 0));
+      const totalLamports = milestoneAmounts.reduce((a, b) => a + b, 0);
+
+      const { tx, contractPda } = await createContract(
+        nextContractId,
+        freelancerPubkey,
+        arbitratorPubkey,
+        totalLamports,
+        milestoneAmounts
+      );
+
+      console.log("Contract created! TX:", tx);
 
       const newContract: LocalContract = {
         id: nextContractId,
         title: formData.title,
         freelancer: formData.freelancer,
-        arbitrator: formData.arbitrator || "Self",
+        arbitrator: formData.arbitrator || publicKey.toString(),
         milestones: milestones.map((m) => ({
           description: m.description,
           amount: parseFloat(m.amount) || 0,
@@ -87,13 +115,12 @@ export default function AppPage() {
         releasedAmount: 0,
         status: "active",
         createdAt: new Date(),
-        pda: `${Math.random().toString(36).substring(2, 15)}...`,
+        pda: contractPda.toString(),
       };
 
       setContracts([...contracts, newContract]);
       setNextContractId(nextContractId + 1);
 
-      // Reset form
       setFormData({ title: "", freelancer: "", arbitrator: "", description: "" });
       setMilestones([{ description: "", amount: "" }]);
       setShowSuccess(true);
@@ -103,6 +130,59 @@ export default function AppPage() {
       setError(err.message || "Failed to create contract");
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const handleFundContract = async (contract: LocalContract) => {
+    if (!connected) return;
+    
+    setIsFunding(contract.id);
+    setError(null);
+
+    try {
+      const tx = await fundContract(contract.id, toLamports(contract.totalAmount));
+      console.log("Contract funded! TX:", tx);
+      
+      setContracts(contracts.map(c => 
+        c.id === contract.id ? { ...c, status: "funded" } : c
+      ));
+    } catch (err: any) {
+      console.error("Error funding contract:", err);
+      setError(err.message || "Failed to fund contract");
+    } finally {
+      setIsFunding(null);
+    }
+  };
+
+  const handleApproveMilestone = async (contract: LocalContract, milestoneIndex: number) => {
+    if (!connected) return;
+
+    setIsApproving(`${contract.id}-${milestoneIndex}`);
+    setError(null);
+
+    try {
+      const tx = await approveMilestone(contract.id, milestoneIndex, new PublicKey(contract.freelancer));
+      console.log("Milestone approved! TX:", tx);
+
+      setContracts(contracts.map(c => {
+        if (c.id === contract.id) {
+          const newMilestones = [...c.milestones];
+          newMilestones[milestoneIndex].status = "approved";
+          const newReleased = c.releasedAmount + newMilestones[milestoneIndex].amount;
+          return { 
+            ...c, 
+            milestones: newMilestones,
+            releasedAmount: newReleased,
+            status: newReleased >= c.totalAmount ? "completed" : c.status
+          };
+        }
+        return c;
+      }));
+    } catch (err: any) {
+      console.error("Error approving milestone:", err);
+      setError(err.message || "Failed to approve milestone");
+    } finally {
+      setIsApproving(null);
     }
   };
 
@@ -121,36 +201,39 @@ export default function AppPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#0a0a0f]">
+    <main className="min-h-screen bg-[#030014]">
       {/* Header */}
-      <header className="border-b border-white/10 bg-black/50 backdrop-blur-sm">
+      <header className="border-b border-white/10 bg-black/50 backdrop-blur-xl sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3">
-            <span className="text-3xl">🛡️</span>
+            <div className="relative">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
+                <span className="text-xl">🛡️</span>
+              </div>
+              <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500 blur-lg opacity-50" />
+            </div>
             <div>
               <span className="text-xl font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">PayGuard</span>
-              <p className="text-xs text-gray-500">Devnet • Demo Mode</p>
+              <p className="text-xs text-gray-500">Devnet • {PAYGUARD_PROGRAM_ID.toString().slice(0, 8)}...</p>
             </div>
           </Link>
-          <button
-            onClick={handleConnect}
-            className={`px-6 py-2.5 rounded-xl font-semibold transition ${
-              connected 
-                ? "bg-green-500/20 text-green-400 border border-green-500/30" 
-                : "bg-gradient-to-r from-purple-500 to-blue-500 text-white hover:opacity-90"
-            }`}
-          >
-            {connected ? "✓ Connected" : "Connect Wallet"}
-          </button>
+          <WalletMultiButton />
         </div>
       </header>
 
       {/* Main Content */}
       <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* Connection Warning */}
+        {/* Connection Status */}
+        {connected && publicKey && (
+          <div className="mb-6 p-4 rounded-xl bg-green-500/10 border border-green-500/30 text-green-200 flex items-center gap-3">
+            <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse" />
+            Connected: {publicKey.toString().slice(0, 8)}...{publicKey.toString().slice(-4)}
+          </div>
+        )}
+
         {!connected && (
           <div className="mb-6 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-yellow-200">
-            ⚠️ Connect your wallet to create and manage contracts
+            ⚠️ Connect your Phantom wallet to create and manage contracts
           </div>
         )}
 
@@ -164,7 +247,7 @@ export default function AppPage() {
         {/* Success Message */}
         {showSuccess && (
           <div className="mb-6 p-4 rounded-xl bg-green-500/10 border border-green-500/30 text-green-200">
-            ✅ Contract created successfully! (Demo Mode)
+            ✅ Contract created successfully on Solana Devnet!
           </div>
         )}
 
@@ -277,7 +360,7 @@ export default function AppPage() {
                 disabled={!connected || isCreating || !formData.title || !formData.freelancer}
                 className="w-full py-4 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
               >
-                {isCreating ? "Creating Contract..." : "🛡️ Create Contract"}
+                {isCreating ? "Creating Contract..." : "🛡️ Create Contract on Solana"}
               </button>
             </div>
           </div>
@@ -287,7 +370,7 @@ export default function AppPage() {
         {activeTab === "contracts" && (
           <div className="space-y-4">
             {contracts.length === 0 ? (
-              <div className="text-center py-12 text-gray-400">
+              <div className="text-center py-12 text-gray-400 bg-white/5 rounded-2xl border border-white/10">
                 <p className="text-4xl mb-4">📄</p>
                 <p>No contracts yet. Create your first one!</p>
               </div>
@@ -301,7 +384,7 @@ export default function AppPage() {
                         Freelancer: {contract.freelancer.slice(0, 8)}...{contract.freelancer.slice(-4)}
                       </p>
                       <p className="text-xs text-gray-500 font-mono mt-1">
-                        PDA: {contract.pda}
+                        PDA: {contract.pda.slice(0, 16)}...
                       </p>
                     </div>
                     <span className={`px-3 py-1 rounded-full text-sm ${
@@ -341,10 +424,32 @@ export default function AppPage() {
                           </span>
                           <span className="text-white">{m.description || `Milestone ${i + 1}`}</span>
                         </div>
-                        <span className="text-gray-400">{m.amount} SOL</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-gray-400">{m.amount} SOL</span>
+                          {m.status === "submitted" && (
+                            <button
+                              onClick={() => handleApproveMilestone(contract, i)}
+                              disabled={isApproving === `${contract.id}-${i}`}
+                              className="px-3 py-1 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 text-sm"
+                            >
+                              {isApproving === `${contract.id}-${i}` ? "..." : "Approve"}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
+
+                  {/* Fund Button */}
+                  {contract.status === "active" && (
+                    <button
+                      onClick={() => handleFundContract(contract)}
+                      disabled={isFunding === contract.id}
+                      className="mt-4 w-full py-3 rounded-xl bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 font-medium border border-blue-500/30"
+                    >
+                      {isFunding === contract.id ? "Funding..." : `💰 Fund Contract (${contract.totalAmount} SOL)`}
+                    </button>
+                  )}
                 </div>
               ))
             )}
@@ -361,17 +466,17 @@ export default function AppPage() {
               All decisions are committed on-chain via SOLPRISM.
             </p>
             <div className="grid md:grid-cols-3 gap-4 text-left">
-              <div className="p-4 rounded-xl bg-black/30">
+              <div className="p-4 rounded-xl bg-black/30 border border-white/5">
                 <div className="text-2xl mb-2">📊</div>
                 <div className="font-semibold text-white mb-1">Evidence Analysis</div>
                 <div className="text-sm text-gray-500">AI reviews all submitted proofs</div>
               </div>
-              <div className="p-4 rounded-xl bg-black/30">
+              <div className="p-4 rounded-xl bg-black/30 border border-white/5">
                 <div className="text-2xl mb-2">🤖</div>
                 <div className="font-semibold text-white mb-1">Fair Resolution</div>
                 <div className="text-sm text-gray-500">Percentage-based fund splits</div>
               </div>
-              <div className="p-4 rounded-xl bg-black/30">
+              <div className="p-4 rounded-xl bg-black/30 border border-white/5">
                 <div className="text-2xl mb-2">🔗</div>
                 <div className="font-semibold text-white mb-1">On-Chain Proof</div>
                 <div className="text-sm text-gray-500">Verifiable reasoning via SOLPRISM</div>
@@ -384,8 +489,8 @@ export default function AppPage() {
       {/* Footer */}
       <footer className="border-t border-white/10 mt-12 py-6">
         <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
-          <p>Built on Solana • PayGuard v1.0</p>
-          <p className="font-mono text-xs">{PAYGUARD_PROGRAM_ID}</p>
+          <p>Built on Solana Devnet • PayGuard v1.0</p>
+          <p className="font-mono text-xs">{PAYGUARD_PROGRAM_ID.toString()}</p>
         </div>
       </footer>
     </main>
