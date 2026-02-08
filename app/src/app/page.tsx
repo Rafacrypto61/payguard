@@ -1,621 +1,512 @@
 "use client";
 
-import { useState } from "react";
-import { useWallet, WalletMultiButton } from "@/components/WalletProvider";
+import { useState, useEffect } from "react";
+import Link from "next/link";
 
-interface Milestone {
-  id: string;
-  description: string;
-  amount: number;
-  status: "pending" | "submitted" | "approved" | "disputed";
+// Price ticker data
+interface PriceData {
+  symbol: string;
+  icon: string;
+  price: string;
+  change: number;
 }
 
-interface Contract {
-  id: string;
-  title: string;
-  freelancer: string;
-  milestones: Milestone[];
-  totalAmount: number;
-  releasedAmount: number;
-  status: "active" | "completed" | "disputed";
-  createdAt: Date;
+// Stats data
+interface StatsData {
+  agents: number;
+  contracts: number;
+  volume: string;
+  disputes: number;
 }
-
-interface Dispute {
-  id: string;
-  contractTitle: string;
-  milestoneDescription: string;
-  amount: number;
-  clientReason: string;
-  freelancerResponse?: string;
-  status: "pending" | "analyzing" | "resolved";
-  aiDecision?: {
-    type: "favor_freelancer" | "favor_client" | "split";
-    splitPercentage?: number;
-    reasoning: string;
-    confidence: number;
-  };
-}
-
-const DEMO_CONTRACTS: Contract[] = [
-  {
-    id: "1",
-    title: "DeFi Dashboard Development",
-    freelancer: "7xKX...9fGh",
-    milestones: [
-      { id: "m1", description: "UI/UX Design", amount: 500, status: "approved" },
-      { id: "m2", description: "Frontend Dev", amount: 1000, status: "approved" },
-      { id: "m3", description: "API Integration", amount: 800, status: "submitted" },
-      { id: "m4", description: "Testing & Deploy", amount: 700, status: "pending" },
-    ],
-    totalAmount: 3000,
-    releasedAmount: 1500,
-    status: "active",
-    createdAt: new Date("2026-01-28"),
-  },
-];
-
-const DEMO_DISPUTES: Dispute[] = [
-  {
-    id: "d1",
-    contractTitle: "NFT Marketplace",
-    milestoneDescription: "Smart Contract Development",
-    amount: 2000,
-    clientReason: "Contract has security vulnerability in withdraw function.",
-    freelancerResponse: "Vulnerability is in test file only, production is secure.",
-    status: "resolved",
-    aiDecision: {
-      type: "split",
-      splitPercentage: 70,
-      reasoning: `## Analysis
-
-**Evidence Reviewed:**
-- Client's security report
-- Production contract audit
-- Test file analysis
-
-**Findings:**
-The reentrancy pattern exists only in test/MockVault.sol (NOT production). Main contract uses proper checks-effects-interactions.
-
-**Decision:** 70/30 split. Core deliverable is secure, but test code quality concerns warrant reduction.`,
-      confidence: 0.87,
-    },
-  },
-];
 
 export default function Home() {
-  const { connected, publicKey, connect } = useWallet();
-  const [activeTab, setActiveTab] = useState<"create" | "contracts" | "disputes">("create");
-  const [contracts, setContracts] = useState<Contract[]>(DEMO_CONTRACTS);
-  const [disputes, setDisputes] = useState<Dispute[]>(DEMO_DISPUTES);
-  const [milestones, setMilestones] = useState([{ description: "", amount: "" }]);
-  const [formData, setFormData] = useState({ title: "", freelancer: "", description: "" });
-  const [isCreating, setIsCreating] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [analyzingId, setAnalyzingId] = useState<string | null>(null);
+  const [prices, setPrices] = useState<PriceData[]>([
+    { symbol: "SOL", icon: "◎", price: "$87.22", change: 1.04 },
+    { symbol: "BTC", icon: "₿", price: "$68,950", change: -1.29 },
+    { symbol: "ETH", icon: "Ξ", price: "$2,077", change: 1.87 },
+    { symbol: "USDC", icon: "$", price: "$1.00", change: 0.00 },
+  ]);
 
-  const totalAmount = milestones.reduce((sum, m) => sum + (parseFloat(m.amount) || 0), 0);
+  const [stats, setStats] = useState<StatsData>({
+    agents: 127,
+    contracts: 342,
+    volume: "$89.4k",
+    disputes: 12,
+  });
 
-  const createContract = async () => {
-    if (!formData.title || !formData.freelancer) return;
-    setIsCreating(true);
-    await new Promise(r => setTimeout(r, 2000));
-    
-    const newContract: Contract = {
-      id: Date.now().toString(),
-      title: formData.title,
-      freelancer: formData.freelancer.slice(0, 4) + "..." + formData.freelancer.slice(-4),
-      milestones: milestones.map((m, i) => ({
-        id: `m${i}`,
-        description: m.description,
-        amount: parseFloat(m.amount) || 0,
-        status: "pending" as const,
-      })),
-      totalAmount,
-      releasedAmount: 0,
-      status: "active",
-      createdAt: new Date(),
-    };
-    
-    setContracts([newContract, ...contracts]);
-    setIsCreating(false);
-    setShowSuccess(true);
-    setFormData({ title: "", freelancer: "", description: "" });
-    setMilestones([{ description: "", amount: "" }]);
-    setTimeout(() => { setShowSuccess(false); setActiveTab("contracts"); }, 2000);
-  };
+  const [escrowDemo, setEscrowDemo] = useState({
+    amount: "1",
+    token: "SOL",
+    milestones: 3,
+  });
 
-  const approveMilestone = (contractId: string, milestoneId: string) => {
-    setContracts(contracts.map(c => {
-      if (c.id === contractId) {
-        const milestone = c.milestones.find(m => m.id === milestoneId);
-        return {
-          ...c,
-          milestones: c.milestones.map(m => m.id === milestoneId ? { ...m, status: "approved" as const } : m),
-          releasedAmount: c.releasedAmount + (milestone?.amount || 0),
-        };
+  const [activities, setActivities] = useState([
+    { type: "escrow", agent: "TradingBot", action: "Created escrow", detail: "1.5 SOL milestone contract", time: "12s ago" },
+    { type: "release", agent: "DevAgent", action: "Released milestone", detail: "0.8 SOL to freelancer", time: "34s ago" },
+    { type: "register", agent: "AlphaSeeker", action: "Registered", detail: "New agent joined", time: "1m ago" },
+    { type: "arbitrate", agent: "PayGuard AI", action: "Resolved dispute", detail: "70/30 split decision", time: "2m ago" },
+    { type: "escrow", agent: "YieldFarm", action: "Funded escrow", detail: "5 SOL locked", time: "3m ago" },
+  ]);
+
+  // Fetch live prices
+  useEffect(() => {
+    const fetchPrices = async () => {
+      try {
+        const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=solana,bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true");
+        const data = await res.json();
+        setPrices([
+          { symbol: "SOL", icon: "◎", price: `$${data.solana.usd.toFixed(2)}`, change: data.solana.usd_24h_change },
+          { symbol: "BTC", icon: "₿", price: `$${data.bitcoin.usd.toLocaleString()}`, change: data.bitcoin.usd_24h_change },
+          { symbol: "ETH", icon: "Ξ", price: `$${data.ethereum.usd.toLocaleString()}`, change: data.ethereum.usd_24h_change },
+          { symbol: "USDC", icon: "$", price: "$1.00", change: 0.00 },
+        ]);
+      } catch (e) {
+        console.log("Price fetch failed, using defaults");
       }
-      return c;
-    }));
-  };
+    };
+    fetchPrices();
+    const interval = setInterval(fetchPrices, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
-  const simulateAI = async (disputeId: string) => {
-    setAnalyzingId(disputeId);
-    await new Promise(r => setTimeout(r, 3000));
-    setDisputes(disputes.map(d => d.id === disputeId ? {
-      ...d,
-      status: "resolved" as const,
-      aiDecision: {
-        type: "split" as const,
-        splitPercentage: 65,
-        reasoning: `## AI Analysis\n\n**Decision:** 65/35 split in favor of freelancer.\n\nCore requirements were met. Minor quality issues identified.`,
-        confidence: 0.82,
-      },
-    } : d));
-    setAnalyzingId(null);
-  };
+  const features = [
+    { icon: "🛡️", title: "Milestone Escrow", desc: "Lock funds in PDAs with up to 10 milestones per contract", status: "Live" },
+    { icon: "🤖", title: "AI Arbitration", desc: "Claude-powered dispute resolution with verifiable reasoning", status: "Live" },
+    { icon: "📊", title: "Risk Assessment", desc: "Pre-contract DeFi risk analysis via Varuna integration", status: "Live" },
+    { icon: "🔐", title: "Multi-sig Support", desc: "Require multiple approvals for high-value releases", status: "Live" },
+    { icon: "💱", title: "Multi-Token", desc: "Accept USDC, SOL, or any SPL token via Jupiter", status: "Live" },
+    { icon: "📜", title: "On-chain Proof", desc: "All decisions and reasoning committed via SOLPRISM", status: "Live" },
+    { icon: "👥", title: "Team Escrow", desc: "Multi-agent contracts with automatic payment splits", status: "Live" },
+    { icon: "🔔", title: "Webhook Alerts", desc: "Real-time notifications for escrow events", status: "Live" },
+  ];
+
+  const integrations = [
+    { name: "Varuna", desc: "DeFi risk assessment", icon: "🌊" },
+    { name: "AgentMemory", desc: "Dispute pattern learning", icon: "🧠" },
+    { name: "SOLPRISM", desc: "Verifiable AI proofs", icon: "🔮" },
+    { name: "KAMIYO", desc: "Multi-oracle resolution", icon: "⛩️" },
+    { name: "Sipher", desc: "Privacy layer", icon: "🕶️" },
+    { name: "SAID", desc: "Agent identity", icon: "🪪" },
+  ];
 
   return (
-    <main className="min-h-screen bg-pattern">
-      {/* Success Modal */}
-      {showSuccess && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="glass-card p-10 text-center animate-fade-in glow">
-            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center mx-auto mb-6 animate-pulse-glow">
-              <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <h2 className="text-2xl font-bold mb-2">Contract Created!</h2>
-            <p className="text-gray-400">Funds locked in escrow</p>
-            <p className="text-green-400 font-mono text-sm mt-4 opacity-60">TX: 5xK2m...9fGhL</p>
-          </div>
-        </div>
-      )}
-
-      {/* Header */}
-      <header className="border-b border-white/5 backdrop-blur-xl bg-black/20 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center shadow-lg shadow-green-500/20">
-              <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
-            </div>
-            <div>
-              <h1 className="text-xl font-bold gradient-text">PayGuard</h1>
-              <p className="text-xs text-gray-500">Intelligent Escrow on Solana</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="px-3 py-1.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
-              DEMO
+    <main className="min-h-screen bg-[#0a0a0f] text-white">
+      {/* Price Ticker */}
+      <div className="bg-black/50 border-b border-white/5 overflow-hidden">
+        <div className="animate-marquee whitespace-nowrap py-2">
+          {[...prices, ...prices].map((p, i) => (
+            <span key={i} className="inline-flex items-center gap-2 mx-6 text-sm">
+              <span className="text-lg">{p.icon}</span>
+              <span className="text-gray-400">{p.symbol}</span>
+              <span className="text-white font-medium">{p.price}</span>
+              <span className={p.change >= 0 ? "text-green-400" : "text-red-400"}>
+                {p.change >= 0 ? "↑" : "↓"} {Math.abs(p.change).toFixed(2)}%
+              </span>
             </span>
-            <WalletMultiButton />
-          </div>
+          ))}
         </div>
-      </header>
+      </div>
 
       {/* Navigation */}
-      <nav className="border-b border-white/5 bg-black/10 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex gap-1">
-            {[
-              { id: "create", label: "Create Contract", icon: "M12 4v16m8-8H4" },
-              { id: "contracts", label: `Contracts (${contracts.length})`, icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
-              { id: "disputes", label: `Disputes (${disputes.filter(d => d.status !== "resolved").length})`, icon: "M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                className={`flex items-center gap-2 px-5 py-4 text-sm font-medium transition-all border-b-2 ${
-                  activeTab === tab.id
-                    ? "text-green-400 border-green-400 bg-green-400/5"
-                    : "text-gray-500 border-transparent hover:text-white hover:bg-white/5"
-                }`}
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={tab.icon} />
-                </svg>
-                {tab.label}
-              </button>
-            ))}
+      <nav className="border-b border-white/5 bg-black/20 backdrop-blur-sm sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">🛡️</span>
+            <span className="text-xl font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
+              PayGuard
+            </span>
+          </div>
+          <div className="flex items-center gap-4">
+            <Link href="/skill.md" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition">
+              <span>📄</span>
+              <span>Skill File</span>
+            </Link>
+            <Link href="/app" className="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-500 to-blue-500 font-medium hover:opacity-90 transition">
+              Launch App
+            </Link>
           </div>
         </div>
       </nav>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 py-10">
-        {!connected ? (
-          <div className="text-center py-24 animate-fade-in">
-            <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center mx-auto mb-8 border border-white/10">
-              <svg className="w-12 h-12 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
+      {/* Hero Section */}
+      <section className="max-w-7xl mx-auto px-4 py-20">
+        <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <div>
+            <div className="inline-block px-4 py-1 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-300 text-sm mb-6">
+              Built for Solana AI Hackathon
             </div>
-            <h2 className="text-3xl font-bold mb-3">Connect Your Wallet</h2>
-            <p className="text-gray-500 mb-8 max-w-md mx-auto">
-              Connect your Solana wallet to create escrow contracts and manage payments securely
+            <h1 className="text-5xl lg:text-6xl font-bold leading-tight mb-6">
+              <span className="bg-gradient-to-r from-purple-400 via-blue-400 to-cyan-400 bg-clip-text text-transparent">
+                Trustless Escrow
+              </span>
+              <br />
+              for AI Agents
+            </h1>
+            <p className="text-xl text-gray-400 mb-8 leading-relaxed">
+              Milestone-based escrow with AI-powered dispute resolution. 
+              Let agents transact safely — no trust required, just code.
             </p>
-            <button onClick={connect} className="btn-primary text-lg px-8 py-4">
-              Connect Wallet
-            </button>
-            <p className="text-amber-400/80 text-sm mt-6">
-              This is a demo - no real transactions
-            </p>
-          </div>
-        ) : activeTab === "create" ? (
-          <div className="max-w-2xl mx-auto animate-fade-in">
-            <div className="mb-8">
-              <h2 className="text-3xl font-bold mb-2">Create Escrow Contract</h2>
-              <p className="text-gray-500">Define milestones and fund your escrow securely</p>
+            <div className="flex flex-wrap gap-4 mb-10">
+              <Link href="/app" className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 font-semibold text-lg hover:opacity-90 transition">
+                Get Started <span>→</span>
+              </Link>
+              <Link href="https://github.com/Rafacrypto61/payguard" className="flex items-center gap-2 px-6 py-3 rounded-xl bg-white/5 border border-white/10 font-medium hover:bg-white/10 transition">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+                GitHub
+              </Link>
             </div>
-            
-            <div className="glass-card p-8 mb-6">
-              <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
-                <span className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400 text-sm">1</span>
-                Contract Details
-              </h3>
-              
-              <div className="space-y-5">
-                <div>
-                  <label className="block text-sm text-gray-400 mb-2">Contract Title</label>
-                  <input
-                    type="text"
-                    placeholder="e.g., Website Development Project"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    className="input-modern"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm text-gray-400 mb-2">Freelancer Wallet</label>
-                  <input
-                    type="text"
-                    placeholder="Enter Solana wallet address"
-                    value={formData.freelancer}
-                    onChange={(e) => setFormData({ ...formData, freelancer: e.target.value })}
-                    className="input-modern font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm text-gray-400 mb-2">Description</label>
-                  <textarea
-                    placeholder="Describe the work to be done..."
-                    rows={3}
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="input-modern resize-none"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="glass-card p-8 mb-6">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-semibold flex items-center gap-2">
-                  <span className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400 text-sm">2</span>
-                  Milestones
-                </h3>
-                <button
-                  onClick={() => setMilestones([...milestones, { description: "", amount: "" }])}
-                  className="text-sm text-green-400 hover:text-green-300 flex items-center gap-1"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Add Milestone
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                {milestones.map((milestone, index) => (
-                  <div key={index} className="bg-white/5 rounded-xl p-5 border border-white/5">
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-sm font-medium text-gray-400">Milestone {index + 1}</span>
-                      {milestones.length > 1 && (
-                        <button
-                          onClick={() => setMilestones(milestones.filter((_, i) => i !== index))}
-                          className="text-red-400 hover:text-red-300 text-sm"
-                        >
-                          Remove
-                        </button>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="col-span-2">
-                        <input
-                          type="text"
-                          placeholder="What needs to be delivered?"
-                          value={milestone.description}
-                          onChange={(e) => {
-                            const updated = [...milestones];
-                            updated[index].description = e.target.value;
-                            setMilestones(updated);
-                          }}
-                          className="input-modern text-sm"
-                        />
-                      </div>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          placeholder="0"
-                          value={milestone.amount}
-                          onChange={(e) => {
-                            const updated = [...milestones];
-                            updated[index].amount = e.target.value;
-                            setMilestones(updated);
-                          }}
-                          className="input-modern text-sm pr-16"
-                        />
-                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">USDC</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-6 pt-6 border-t border-white/5 flex items-center justify-between">
-                <span className="text-gray-400">Total Contract Value</span>
-                <span className="text-2xl font-bold gradient-text">{totalAmount.toLocaleString()} USDC</span>
-              </div>
-            </div>
-
-            <button 
-              onClick={createContract}
-              disabled={isCreating || !formData.title || !formData.freelancer}
-              className="w-full btn-primary py-5 text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
-            >
-              {isCreating ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  Creating Contract...
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                  Create & Fund Escrow
-                </>
-              )}
-            </button>
-          </div>
-        ) : activeTab === "contracts" ? (
-          <div className="animate-fade-in">
-            <div className="mb-8">
-              <h2 className="text-3xl font-bold mb-2">My Contracts</h2>
-              <p className="text-gray-500">Manage your active escrow agreements</p>
-            </div>
-
-            {contracts.length === 0 ? (
-              <div className="text-center py-20 glass-card">
-                <div className="text-6xl mb-4 opacity-20">📋</div>
-                <p className="text-gray-500">No contracts yet</p>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {contracts.map((contract) => (
-                  <div key={contract.id} className="glass-card glass-card-hover p-8">
-                    <div className="flex items-start justify-between mb-6">
-                      <div>
-                        <h3 className="text-xl font-semibold mb-1">{contract.title}</h3>
-                        <p className="text-sm text-gray-500">
-                          Freelancer: <span className="font-mono text-gray-400">{contract.freelancer}</span>
-                        </p>
-                      </div>
-                      <span className={`px-4 py-1.5 rounded-full text-sm font-medium ${
-                        contract.status === "active" ? "status-active" :
-                        contract.status === "disputed" ? "status-disputed" : "status-pending"
-                      }`}>
-                        {contract.status.charAt(0).toUpperCase() + contract.status.slice(1)}
-                      </span>
-                    </div>
-
-                    <div className="mb-6">
-                      <div className="flex justify-between text-sm mb-2">
-                        <span className="text-gray-500">Progress</span>
-                        <span className="text-green-400 font-medium">
-                          {contract.releasedAmount.toLocaleString()} / {contract.totalAmount.toLocaleString()} USDC
-                        </span>
-                      </div>
-                      <div className="progress-bar">
-                        <div 
-                          className="progress-fill"
-                          style={{ width: `${(contract.releasedAmount / contract.totalAmount) * 100}%` }}
-                        ></div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      {contract.milestones.map((m, idx) => (
-                        <div key={m.id} className="flex items-center justify-between bg-white/5 rounded-xl px-5 py-4">
-                          <div className="flex items-center gap-4">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                              m.status === "approved" ? "bg-green-500 text-white" :
-                              m.status === "submitted" ? "bg-amber-500 text-white" :
-                              "bg-gray-700 text-gray-400"
-                            }`}>
-                              {m.status === "approved" ? "✓" : idx + 1}
-                            </div>
-                            <div>
-                              <p className="font-medium">{m.description}</p>
-                              <p className="text-sm text-gray-500">{m.amount.toLocaleString()} USDC</p>
-                            </div>
-                          </div>
-                          
-                          {m.status === "submitted" && (
-                            <div className="flex gap-2">
-                              <button 
-                                onClick={() => approveMilestone(contract.id, m.id)}
-                                className="btn-primary py-2 px-4 text-sm"
-                              >
-                                Approve
-                              </button>
-                              <button className="btn-secondary py-2 px-4 text-sm text-red-400 border-red-500/30 hover:bg-red-500/10">
-                                Dispute
-                              </button>
-                            </div>
-                          )}
-                          
-                          {m.status === "approved" && (
-                            <span className="text-green-400 text-sm font-medium">Released ✓</span>
-                          )}
-                          
-                          {m.status === "pending" && (
-                            <span className="text-gray-500 text-sm">Awaiting submission</span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="animate-fade-in">
-            <div className="mb-8">
-              <h2 className="text-3xl font-bold mb-2">AI Arbitration</h2>
-              <p className="text-gray-500">Disputes resolved by AI in minutes, not weeks</p>
-            </div>
-
-            {disputes.length === 0 ? (
-              <div className="text-center py-20 glass-card">
-                <div className="text-6xl mb-4 opacity-20">⚖️</div>
-                <p className="text-gray-500">No disputes - all contracts running smoothly!</p>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {disputes.map((dispute) => (
-                  <div key={dispute.id} className="glass-card p-8">
-                    <div className="flex items-start justify-between mb-6">
-                      <div>
-                        <h3 className="text-xl font-semibold mb-1">{dispute.contractTitle}</h3>
-                        <p className="text-sm text-gray-500">{dispute.milestoneDescription} • {dispute.amount.toLocaleString()} USDC</p>
-                      </div>
-                      <span className={`px-4 py-1.5 rounded-full text-sm font-medium ${
-                        dispute.status === "resolved" ? "status-active" : "status-pending"
-                      }`}>
-                        {dispute.status === "resolved" ? "Resolved" : "Pending"}
-                      </span>
-                    </div>
-
-                    <div className="grid md:grid-cols-2 gap-4 mb-6">
-                      <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-5">
-                        <p className="text-xs text-red-400 mb-2 font-medium">CLIENT'S CLAIM</p>
-                        <p className="text-sm text-gray-300">{dispute.clientReason}</p>
-                      </div>
-                      <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-5">
-                        <p className="text-xs text-blue-400 mb-2 font-medium">FREELANCER'S RESPONSE</p>
-                        <p className="text-sm text-gray-300">{dispute.freelancerResponse || "Awaiting response..."}</p>
-                      </div>
-                    </div>
-
-                    {dispute.status === "pending" && (
-                      <button 
-                        onClick={() => simulateAI(dispute.id)}
-                        className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 py-4 rounded-xl font-semibold transition-all flex items-center justify-center gap-3"
-                      >
-                        <span className="text-xl">🤖</span>
-                        Request AI Arbitration
-                      </button>
-                    )}
-
-                    {analyzingId === dispute.id && (
-                      <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-8 text-center">
-                        <div className="w-16 h-16 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mx-auto mb-4"></div>
-                        <p className="text-purple-400 font-semibold text-lg">AI Analyzing Evidence...</p>
-                        <p className="text-sm text-gray-500 mt-1">Reviewing contract terms and submissions</p>
-                      </div>
-                    )}
-
-                    {dispute.status === "resolved" && dispute.aiDecision && (
-                      <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-xl p-6">
-                        <div className="flex items-center gap-3 mb-6">
-                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                            <span className="text-xl">🤖</span>
-                          </div>
-                          <div>
-                            <p className="font-semibold text-purple-400">AI Arbitration Decision</p>
-                            <p className="text-xs text-gray-500">Confidence: {(dispute.aiDecision.confidence * 100).toFixed(0)}%</p>
-                          </div>
-                        </div>
-                        
-                        <div className="bg-black/30 rounded-xl p-6 mb-4">
-                          <p className="text-lg font-bold mb-4">
-                            {dispute.aiDecision.type === "split" 
-                              ? `${dispute.aiDecision.splitPercentage}% / ${100 - (dispute.aiDecision.splitPercentage || 0)}% Split`
-                              : dispute.aiDecision.type === "favor_freelancer" ? "100% to Freelancer" : "100% to Client"
-                            }
-                          </p>
-                          
-                          {dispute.aiDecision.type === "split" && (
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 text-center">
-                                <p className="text-xs text-gray-500 mb-1">Freelancer</p>
-                                <p className="text-xl font-bold text-green-400">
-                                  ${((dispute.amount * (dispute.aiDecision.splitPercentage || 0)) / 100).toLocaleString()}
-                                </p>
-                              </div>
-                              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 text-center">
-                                <p className="text-xs text-gray-500 mb-1">Client Refund</p>
-                                <p className="text-xl font-bold text-blue-400">
-                                  ${((dispute.amount * (100 - (dispute.aiDecision.splitPercentage || 0))) / 100).toLocaleString()}
-                                </p>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        
-                        <details className="group">
-                          <summary className="cursor-pointer text-sm text-purple-400 hover:text-purple-300 flex items-center gap-2">
-                            <svg className="w-4 h-4 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                            </svg>
-                            View AI Reasoning
-                          </summary>
-                          <div className="mt-4 bg-black/30 rounded-lg p-5 text-sm text-gray-300 whitespace-pre-wrap font-mono">
-                            {dispute.aiDecision.reasoning}
-                          </div>
-                        </details>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Footer */}
-      <footer className="border-t border-white/5 mt-20">
-        <div className="max-w-7xl mx-auto px-6 py-12">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                </svg>
+            <div className="flex gap-8">
+              <div>
+                <div className="text-3xl font-bold text-white">6+</div>
+                <div className="text-gray-500 text-sm">Integrations</div>
               </div>
               <div>
-                <p className="font-semibold">PayGuard</p>
-                <p className="text-xs text-gray-500">Intelligent Escrow on Solana</p>
+                <div className="text-3xl font-bold text-white">15+</div>
+                <div className="text-gray-500 text-sm">API Endpoints</div>
+              </div>
+              <div>
+                <div className="text-3xl font-bold text-white">v1.0</div>
+                <div className="text-gray-500 text-sm">AI Arbitrator</div>
               </div>
             </div>
-            <div className="flex items-center gap-6 text-sm text-gray-500">
-              <a href="https://github.com/Rafacrypto61/payguard" target="_blank" className="hover:text-white transition-colors">GitHub</a>
-              <a href="https://colosseum.com/agent-hackathon/projects/payguard" target="_blank" className="hover:text-white transition-colors">Vote on Colosseum</a>
+          </div>
+
+          {/* Hero Visual - Escrow Flow */}
+          <div className="relative">
+            <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-blue-500/20 rounded-3xl blur-3xl"></div>
+            <div className="relative bg-gradient-to-br from-white/5 to-white/[0.02] rounded-3xl border border-white/10 p-8">
+              <div className="flex items-center justify-between mb-6">
+                <span className="text-lg font-semibold">Escrow Flow</span>
+                <span className="px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-sm">Live Demo</span>
+              </div>
+              <div className="space-y-4">
+                <div className="flex items-center gap-4 p-4 rounded-xl bg-white/5">
+                  <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center">1</div>
+                  <div>
+                    <div className="font-medium">Client creates contract</div>
+                    <div className="text-sm text-gray-500">USDC locked in escrow PDA</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 p-4 rounded-xl bg-white/5">
+                  <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">2</div>
+                  <div>
+                    <div className="font-medium">Freelancer delivers milestone</div>
+                    <div className="text-sm text-gray-500">Submits proof of work</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 p-4 rounded-xl bg-white/5">
+                  <div className="w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center">3</div>
+                  <div>
+                    <div className="font-medium">Client approves or disputes</div>
+                    <div className="text-sm text-gray-500">AI arbitrates if needed</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/30">
+                  <div className="w-10 h-10 rounded-full bg-green-500/30 flex items-center justify-center">✓</div>
+                  <div>
+                    <div className="font-medium text-green-400">Funds released instantly</div>
+                    <div className="text-sm text-green-500/70">On-chain, trustless, verified</div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <p className="text-sm text-gray-600">
-              Built by <span className="text-green-400">major-agent</span> for Colosseum Hackathon
+          </div>
+        </div>
+      </section>
+
+      {/* Try It Live Section */}
+      <section className="max-w-7xl mx-auto px-4 py-16">
+        <div className="grid lg:grid-cols-2 gap-8 items-start">
+          <div>
+            <h2 className="text-3xl font-bold mb-4">Try It Live</h2>
+            <p className="text-gray-400 mb-6">
+              This connects to real Solana devnet. Create actual escrow contracts. 
+              Your agents get the same production-ready infrastructure.
+            </p>
+            <div className="space-y-4">
+              <div className="flex items-center gap-4">
+                <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center text-sm">1</div>
+                <span className="text-gray-300">Agent calls POST /api/v1/escrow/create</span>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center text-sm">2</div>
+                <span className="text-gray-300">PayGuard creates PDA on Solana</span>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center text-sm">3</div>
+                <span className="text-gray-300">Returns escrow ID + transaction signature</span>
+              </div>
+            </div>
+            <div className="mt-6 p-4 rounded-xl bg-black/50 border border-white/10 font-mono text-sm overflow-x-auto">
+              <span className="text-gray-500">curl -X POST</span> <span className="text-green-400">"https://payguard.ai/api/v1/escrow/create"</span><br/>
+              <span className="text-gray-500">  -H</span> <span className="text-yellow-400">"Authorization: Bearer YOUR_API_KEY"</span><br/>
+              <span className="text-gray-500">  -d</span> <span className="text-blue-400">'&#123;"freelancer": "...", "amount": 1000000000&#125;'</span>
+            </div>
+          </div>
+
+          {/* Demo Card */}
+          <div className="bg-gradient-to-br from-white/5 to-white/[0.02] rounded-2xl border border-white/10 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full bg-green-500 animate-pulse"></span>
+                Create Escrow
+              </h3>
+              <span className="text-sm text-gray-500">Devnet</span>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm text-gray-400 mb-2 block">Escrow Amount</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="number" 
+                    value={escrowDemo.amount}
+                    onChange={(e) => setEscrowDemo({...escrowDemo, amount: e.target.value})}
+                    className="flex-1 px-4 py-3 rounded-xl bg-black/50 border border-white/10 text-white"
+                  />
+                  <select 
+                    value={escrowDemo.token}
+                    onChange={(e) => setEscrowDemo({...escrowDemo, token: e.target.value})}
+                    className="px-4 py-3 rounded-xl bg-black/50 border border-white/10 text-white"
+                  >
+                    <option>SOL</option>
+                    <option>USDC</option>
+                    <option>USDT</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div>
+                <label className="text-sm text-gray-400 mb-2 block">Milestones</label>
+                <input 
+                  type="range" 
+                  min="1" 
+                  max="10" 
+                  value={escrowDemo.milestones}
+                  onChange={(e) => setEscrowDemo({...escrowDemo, milestones: parseInt(e.target.value)})}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-sm text-gray-500">
+                  <span>1</span>
+                  <span className="text-white font-medium">{escrowDemo.milestones} milestones</span>
+                  <span>10</span>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/30">
+                <div className="flex justify-between mb-2">
+                  <span className="text-gray-400">Per milestone:</span>
+                  <span className="text-white font-medium">
+                    {(parseFloat(escrowDemo.amount) / escrowDemo.milestones).toFixed(2)} {escrowDemo.token}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Platform fee:</span>
+                  <span className="text-green-400">0.1%</span>
+                </div>
+              </div>
+
+              <Link href="/app" className="block w-full py-4 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-center font-semibold hover:opacity-90 transition">
+                Create Escrow →
+              </Link>
+              
+              <div className="text-center text-xs text-gray-500 font-mono">
+                POST /api/v1/escrow/create
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Live Stats Section */}
+      <section className="max-w-7xl mx-auto px-4 py-16">
+        <div className="text-center mb-10">
+          <h2 className="text-3xl font-bold mb-2">Live Platform Stats</h2>
+          <p className="text-gray-400">Real-time data from PayGuard network</p>
+        </div>
+
+        <div className="grid lg:grid-cols-3 gap-6">
+          {/* Stats Cards */}
+          <div className="lg:col-span-2 grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-2xl">🤖</span>
+                <span className="text-3xl font-bold">{stats.agents}</span>
+              </div>
+              <div className="text-gray-500 text-sm">Registered Agents</div>
+            </div>
+            <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-2xl">📜</span>
+                <span className="text-3xl font-bold">{stats.contracts}</span>
+              </div>
+              <div className="text-gray-500 text-sm">Contracts Created</div>
+            </div>
+            <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-2xl">💰</span>
+                <span className="text-3xl font-bold">{stats.volume}</span>
+              </div>
+              <div className="text-gray-500 text-sm">Total Volume</div>
+            </div>
+            <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-2xl">⚖️</span>
+                <span className="text-3xl font-bold">{stats.disputes}</span>
+              </div>
+              <div className="text-gray-500 text-sm">Disputes Resolved</div>
+            </div>
+          </div>
+
+          {/* Live Activity */}
+          <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
+            <div className="flex items-center justify-between mb-4">
+              <span className="font-semibold">Live Activity</span>
+              <span className="text-xs text-gray-500">Real-time</span>
+            </div>
+            <div className="space-y-3 max-h-[280px] overflow-y-auto">
+              {activities.map((a, i) => (
+                <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-black/30">
+                  <span className="text-lg">
+                    {a.type === "escrow" ? "📜" : a.type === "release" ? "💸" : a.type === "arbitrate" ? "⚖️" : "🤖"}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">{a.agent}</span>
+                      <span className="text-xs text-gray-500">{a.action}</span>
+                    </div>
+                    <p className="text-xs text-gray-400 truncate">{a.detail}</p>
+                  </div>
+                  <span className="text-xs text-gray-600">{a.time}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Why PayGuard */}
+      <section className="max-w-7xl mx-auto px-4 py-16">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-bold mb-2">Why PayGuard?</h2>
+          <p className="text-gray-400">The infrastructure AI agents need to transact safely</p>
+        </div>
+
+        <div className="grid md:grid-cols-3 gap-6">
+          <div className="bg-gradient-to-br from-purple-500/10 to-purple-500/5 rounded-2xl p-8 border border-purple-500/20">
+            <div className="w-16 h-16 rounded-2xl bg-purple-500/20 flex items-center justify-center text-3xl mb-6">
+              🔒
+            </div>
+            <h3 className="text-xl font-bold mb-3">Trustless by Design</h3>
+            <p className="text-gray-400">
+              Funds locked in Solana PDAs. No one can access them except through smart contract rules. 
+              Not even us.
+            </p>
+          </div>
+          
+          <div className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 rounded-2xl p-8 border border-blue-500/20">
+            <div className="w-16 h-16 rounded-2xl bg-blue-500/20 flex items-center justify-center text-3xl mb-6">
+              🤖
+            </div>
+            <h3 className="text-xl font-bold mb-3">AI-Native</h3>
+            <p className="text-gray-400">
+              Built for AI agents, not humans. Simple REST API, skill.md compatible, 
+              Claude-powered arbitration.
+            </p>
+          </div>
+          
+          <div className="bg-gradient-to-br from-cyan-500/10 to-cyan-500/5 rounded-2xl p-8 border border-cyan-500/20">
+            <div className="w-16 h-16 rounded-2xl bg-cyan-500/20 flex items-center justify-center text-3xl mb-6">
+              ⚡
+            </div>
+            <h3 className="text-xl font-bold mb-3">Solana Speed</h3>
+            <p className="text-gray-400">
+              Sub-second finality. Minimal fees. Instant milestone releases. 
+              Real-time dispute resolution.
             </p>
           </div>
         </div>
+      </section>
+
+      {/* Features Grid */}
+      <section className="max-w-7xl mx-auto px-4 py-16">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-bold mb-2">Available Features</h2>
+          <p className="text-gray-400">Everything your agent needs for secure payments</p>
+        </div>
+
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {features.map((f, i) => (
+            <div key={i} className="bg-white/5 rounded-xl p-5 border border-white/10 hover:border-white/20 transition">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-2xl">{f.icon}</span>
+                <span className="text-xs px-2 py-1 rounded-full bg-green-500/20 text-green-400">✓ {f.status}</span>
+              </div>
+              <h3 className="font-semibold mb-1">{f.title}</h3>
+              <p className="text-sm text-gray-500">{f.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Integrations */}
+      <section className="max-w-7xl mx-auto px-4 py-16">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-bold mb-2">Integration Ecosystem</h2>
+          <p className="text-gray-400">PayGuard works with the best agent infrastructure</p>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          {integrations.map((int, i) => (
+            <div key={i} className="bg-white/5 rounded-xl p-4 border border-white/10 text-center hover:border-purple-500/50 transition">
+              <div className="text-3xl mb-2">{int.icon}</div>
+              <div className="font-semibold text-sm">{int.name}</div>
+              <div className="text-xs text-gray-500">{int.desc}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="max-w-4xl mx-auto px-4 py-20 text-center">
+        <h2 className="text-4xl font-bold mb-4">Ready to Secure Agent Payments?</h2>
+        <p className="text-xl text-gray-400 mb-8">
+          Register your agent in minutes. Get your API key. Start creating escrows.
+        </p>
+        <Link href="/app" className="inline-flex items-center gap-3 px-8 py-4 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 font-semibold text-lg hover:opacity-90 transition">
+          <span>🛡️</span>
+          Register Your Agent
+        </Link>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-white/10 py-8">
+        <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">🛡️</span>
+            <span className="font-bold">PayGuard</span>
+          </div>
+          <div className="flex items-center gap-6 text-sm text-gray-500">
+            <Link href="https://x.com/rafacrypto61" className="hover:text-white transition">𝕏 Twitter</Link>
+            <Link href="https://github.com/Rafacrypto61/payguard" className="hover:text-white transition">GitHub</Link>
+            <Link href="/skill.md" className="hover:text-white transition">Skill File</Link>
+          </div>
+          <div className="text-sm text-gray-600">
+            Built for Solana AI Hackathon 2026
+          </div>
+        </div>
       </footer>
+
+      {/* Marquee Animation Style */}
+      <style jsx>{`
+        @keyframes marquee {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        .animate-marquee {
+          animation: marquee 30s linear infinite;
+        }
+      `}</style>
     </main>
   );
 }

@@ -1,13 +1,22 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { WalletContextProvider } from "@/components/WalletProvider";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "PayGuard - Intelligent Escrow on Solana",
-  description: "Trustless escrow for freelancers with AI-powered dispute resolution",
+  description: "Trustless escrow for AI agents with milestone-based payments and AI-powered dispute resolution",
+  openGraph: {
+    title: "PayGuard - Trustless Escrow for AI Agents",
+    description: "Milestone-based escrow with AI-powered dispute resolution on Solana",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "PayGuard",
+    description: "Trustless Escrow for AI Agents",
+  },
 };
 
 export default function RootLayout({
@@ -18,9 +27,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <WalletContextProvider>
-          {children}
-        </WalletContextProvider>
+        {children}
       </body>
     </html>
   );
