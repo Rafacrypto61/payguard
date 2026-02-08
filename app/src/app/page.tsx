@@ -1,41 +1,42 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 
-// Animated counter hook
-function useAnimatedCounter(target: number, duration: number = 2000) {
-  const [count, setCount] = useState(0);
-  useEffect(() => {
-    let start = 0;
-    const step = target / (duration / 16);
-    const timer = setInterval(() => {
-      start += step;
-      if (start >= target) {
-        setCount(target);
-        clearInterval(timer);
-      } else {
-        setCount(Math.floor(start));
-      }
-    }, 16);
-    return () => clearInterval(timer);
-  }, [target, duration]);
-  return count;
+// Price data interface
+interface PriceData {
+  symbol: string;
+  icon: string;
+  price: string;
+  change: number;
 }
 
 // Floating particles background
 function ParticleField() {
+  const [particles, setParticles] = useState<Array<{left: string, top: string, delay: string, duration: string}>>([]);
+  
+  useEffect(() => {
+    setParticles(
+      [...Array(30)].map(() => ({
+        left: `${Math.random() * 100}%`,
+        top: `${Math.random() * 100}%`,
+        delay: `${Math.random() * 5}s`,
+        duration: `${5 + Math.random() * 10}s`,
+      }))
+    );
+  }, []);
+
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {[...Array(50)].map((_, i) => (
+      {particles.map((p, i) => (
         <div
           key={i}
           className="absolute w-1 h-1 bg-purple-500/30 rounded-full animate-float"
           style={{
-            left: `${Math.random() * 100}%`,
-            top: `${Math.random() * 100}%`,
-            animationDelay: `${Math.random() * 5}s`,
-            animationDuration: `${5 + Math.random() * 10}s`,
+            left: p.left,
+            top: p.top,
+            animationDelay: p.delay,
+            animationDuration: p.duration,
           }}
         />
       ))}
@@ -69,33 +70,72 @@ function TerminalBlock({ children, title = "terminal" }: { children: React.React
   );
 }
 
-// Animated typing effect
-function TypeWriter({ text, speed = 50 }: { text: string; speed?: number }) {
-  const [displayed, setDisplayed] = useState("");
-  useEffect(() => {
-    let i = 0;
-    const timer = setInterval(() => {
-      if (i < text.length) {
-        setDisplayed(text.slice(0, i + 1));
-        i++;
-      } else {
-        clearInterval(timer);
-      }
-    }, speed);
-    return () => clearInterval(timer);
-  }, [text, speed]);
-  return <span>{displayed}<span className="animate-pulse">|</span></span>;
+// Price Ticker Component
+function PriceTicker({ prices }: { prices: PriceData[] }) {
+  return (
+    <div className="bg-black/50 border-b border-white/5 overflow-hidden">
+      <div className="flex animate-marquee whitespace-nowrap py-2">
+        {[...prices, ...prices].map((p, i) => (
+          <span key={i} className="inline-flex items-center gap-2 mx-6 text-sm">
+            <span className="text-lg">{p.icon}</span>
+            <span className="text-gray-400">{p.symbol}</span>
+            <span className="text-white font-medium">{p.price}</span>
+            <span className={p.change >= 0 ? "text-green-400" : "text-red-400"}>
+              {p.change >= 0 ? "↑" : "↓"} {Math.abs(p.change).toFixed(2)}%
+            </span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function Home() {
   const [mounted, setMounted] = useState(false);
-  const agents = useAnimatedCounter(127);
-  const contracts = useAnimatedCounter(342);
-  const volume = useAnimatedCounter(89);
-  const uptime = useAnimatedCounter(99);
+  const [prices, setPrices] = useState<PriceData[]>([
+    { symbol: "SOL", icon: "◎", price: "$0", change: 0 },
+    { symbol: "BTC", icon: "₿", price: "$0", change: 0 },
+    { symbol: "ETH", icon: "Ξ", price: "$0", change: 0 },
+  ]);
 
   useEffect(() => {
     setMounted(true);
+    
+    // Fetch real prices from CoinGecko
+    const fetchPrices = async () => {
+      try {
+        const res = await fetch(
+          "https://api.coingecko.com/api/v3/simple/price?ids=solana,bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true"
+        );
+        const data = await res.json();
+        setPrices([
+          { 
+            symbol: "SOL", 
+            icon: "◎", 
+            price: `$${data.solana?.usd?.toFixed(2) || '0'}`, 
+            change: data.solana?.usd_24h_change || 0 
+          },
+          { 
+            symbol: "BTC", 
+            icon: "₿", 
+            price: `$${data.bitcoin?.usd?.toLocaleString() || '0'}`, 
+            change: data.bitcoin?.usd_24h_change || 0 
+          },
+          { 
+            symbol: "ETH", 
+            icon: "Ξ", 
+            price: `$${data.ethereum?.usd?.toLocaleString() || '0'}`, 
+            change: data.ethereum?.usd_24h_change || 0 
+          },
+        ]);
+      } catch (e) {
+        console.log("Price fetch failed");
+      }
+    };
+    
+    fetchPrices();
+    const interval = setInterval(fetchPrices, 60000);
+    return () => clearInterval(interval);
   }, []);
 
   const features = [
@@ -116,13 +156,16 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-[#030014] text-white overflow-hidden">
+      {/* Price Ticker */}
+      {mounted && <PriceTicker prices={prices} />}
+
       {/* Animated Background */}
       <div className="fixed inset-0 z-0">
         <div className="absolute inset-0 bg-gradient-to-br from-purple-900/20 via-transparent to-blue-900/20" />
         <GlowingOrb className="w-96 h-96 bg-purple-600 -top-48 -left-48" />
         <GlowingOrb className="w-96 h-96 bg-blue-600 -bottom-48 -right-48" />
         <GlowingOrb className="w-64 h-64 bg-cyan-600 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-        <ParticleField />
+        {mounted && <ParticleField />}
         {/* Grid overlay */}
         <div 
           className="absolute inset-0 opacity-[0.02]"
@@ -213,24 +256,32 @@ export default function Home() {
             </Link>
           </div>
 
-          {/* Stats */}
+          {/* Stats - HONEST VERSION */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl mx-auto">
-            {[
-              { value: agents, label: "Agents", suffix: "+" },
-              { value: contracts, label: "Contracts", suffix: "" },
-              { value: volume, label: "Volume", prefix: "$", suffix: "K" },
-              { value: uptime, label: "Uptime", suffix: "%" },
-            ].map((stat, i) => (
-              <div 
-                key={i} 
-                className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm"
-              >
-                <div className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
-                  {stat.prefix}{mounted ? stat.value : 0}{stat.suffix}
-                </div>
-                <div className="text-sm text-gray-500">{stat.label}</div>
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm">
+              <div className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
+                Beta
               </div>
-            ))}
+              <div className="text-sm text-gray-500">Status</div>
+            </div>
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm">
+              <div className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
+                Devnet
+              </div>
+              <div className="text-sm text-gray-500">Network</div>
+            </div>
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm">
+              <div className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
+                0.5%
+              </div>
+              <div className="text-sm text-gray-500">Fee</div>
+            </div>
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm">
+              <div className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
+                v1.0
+              </div>
+              <div className="text-sm text-gray-500">Version</div>
+            </div>
           </div>
         </div>
       </section>
@@ -265,7 +316,7 @@ export default function Home() {
               <div className="text-gray-600 text-xs">+ @payguard/sdk@1.0.0</div>
               <div className="mt-4 text-purple-400">// Create escrow in 3 lines</div>
               <div><span className="text-pink-400">const</span> escrow = <span className="text-pink-400">await</span> payguard.<span className="text-cyan-400">createEscrow</span>{'({'}</div>
-              <div className="pl-4">freelancer: <span className="text-yellow-400">"DxG4...8kPq"</span>,</div>
+              <div className="pl-4">freelancer: <span className="text-yellow-400">&quot;DxG4...8kPq&quot;</span>,</div>
               <div className="pl-4">amount: <span className="text-orange-400">1_000_000_000</span>, <span className="text-gray-600">// 1 SOL</span></div>
               <div className="pl-4">milestones: [<span className="text-orange-400">3</span>]</div>
               <div>{'});'}</div>
@@ -288,7 +339,6 @@ export default function Home() {
               key={i} 
               className="group relative p-6 rounded-2xl bg-white/5 border border-white/10 hover:border-white/20 transition-all duration-300 overflow-hidden"
             >
-              {/* Glow effect on hover */}
               <div className={`absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity bg-gradient-to-br ${f.color}`} />
               
               <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${f.color} flex items-center justify-center text-2xl mb-4`}>
@@ -340,7 +390,7 @@ export default function Home() {
           <div className="relative">
             <h2 className="text-4xl font-bold mb-4">Ready to Build?</h2>
             <p className="text-gray-400 mb-8 max-w-lg mx-auto">
-              Join the agents already using PayGuard for secure, trustless payments.
+              Test on Solana Devnet. Connect your Phantom wallet and create your first escrow.
             </p>
             <Link 
               href="/app" 
@@ -385,6 +435,13 @@ export default function Home() {
         .animate-gradient-x {
           background-size: 200% 200%;
           animation: gradient-x 3s ease infinite;
+        }
+        @keyframes marquee {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        .animate-marquee {
+          animation: marquee 20s linear infinite;
         }
       `}</style>
     </main>
