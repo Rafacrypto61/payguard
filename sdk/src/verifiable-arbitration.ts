@@ -1,16 +1,32 @@
 /**
- * Verifiable Arbitration Module
- * 
- * Integrates SOLPRISM for cryptographically verifiable AI reasoning.
- * Every arbitration decision is committed on-chain BEFORE execution,
- * making the reasoning tamper-proof and auditable.
+ * Verifiable Arbitration Module — SOLPRISM Integration
+ *
+ * Every AI arbitration decision is cryptographically committed onchain
+ * via the SOLPRISM protocol BEFORE funds move. After resolution, the
+ * full reasoning is revealed onchain so both parties can verify the
+ * decision was fair, consistent, and untampered.
+ *
+ * Flow:
+ *   1. AI analyzes the dispute (evidence, requirements, deliverables)
+ *   2. Reasoning trace is hashed and COMMITTED to SOLPRISM onchain
+ *   3. PayGuard executes the dispute resolution (fund transfer)
+ *   4. Full reasoning is REVEALED onchain for public verification
+ *   5. Anyone can VERIFY the reasoning matches the original commitment
+ *
+ * @see https://www.solprism.app/
+ * @see https://github.com/basedmereum/axiom-protocol
  */
 
-import { Connection, PublicKey, Keypair, Transaction } from "@solana/web3.js";
+import { Connection, PublicKey, Keypair } from "@solana/web3.js";
 import { createHash } from "crypto";
+import {
+  SolprismClient,
+  SOLPRISM_PROGRAM_ID,
+} from "@solprism/sdk";
+import { createReasoningTrace } from "@solprism/sdk/schema";
+import type { ReasoningTrace } from "@solprism/sdk/types";
 
-// SOLPRISM Program ID (devnet/mainnet)
-const SOLPRISM_PROGRAM_ID = new PublicKey("CZcvoryaQNrtZ3qb3gC1h9opcYpzEP1D9Mu1RVwFQeBu");
+// ─── Types ────────────────────────────────────────────────────────────────
 
 export interface ArbitrationReasoning {
   contractId: string;
@@ -36,19 +52,60 @@ export interface ArbitrationReasoning {
 }
 
 export interface CommitResult {
+  /** SHA-256 hash of the canonical reasoning JSON */
   hash: string;
-  commitTx?: string;
+  /** SOLPRISM onchain commitment transaction signature */
+  commitTx: string;
+  /** SOLPRISM commitment PDA address */
+  commitmentAddress: string;
+  /** Solana slot at which the commitment was anchored */
+  slot: number;
+  /** The full arbitration reasoning (kept offchain until reveal) */
   reasoning: ArbitrationReasoning;
 }
 
-export interface VerifyResult {
-  valid: boolean;
-  reasoning?: ArbitrationReasoning;
-  revealTx?: string;
+export interface RevealResult {
+  /** Transaction signature for the onchain reveal */
+  revealTx: string;
+  /** URI where the full reasoning is stored */
+  reasoningUri: string;
 }
 
+export interface VerifyResult {
+  /** Whether the reasoning matches the onchain commitment */
+  valid: boolean;
+  /** Human-readable verification message */
+  message: string;
+  /** The hash computed from the provided reasoning */
+  computedHash: string;
+  /** The hash stored onchain in the SOLPRISM commitment */
+  storedHash: string;
+  /** The reasoning that was verified (if provided) */
+  reasoning?: ArbitrationReasoning;
+  /** SOLPRISM explorer link for public verification */
+  explorerUrl?: string;
+}
+
+export interface SolprismArbitrationConfig {
+  /** Solana RPC connection */
+  connection: Connection;
+  /** Anthropic API key for AI analysis */
+  anthropicApiKey: string;
+  /** SOLPRISM agent name (registered onchain) */
+  agentName?: string;
+  /** Claude model to use for arbitration */
+  model?: string;
+  /** SOLPRISM program ID (defaults to mainnet/devnet) */
+  programId?: PublicKey;
+  /** Base URI for storing revealed reasoning (e.g. IPFS gateway, Arweave) */
+  reasoningStorageUri?: string;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────
+
 /**
- * Creates a verifiable hash of arbitration reasoning
+ * Create a deterministic SHA-256 hash of arbitration reasoning.
+ * Keys are sorted for canonical representation.
  */
 export function hashReasoning(reasoning: ArbitrationReasoning): string {
   const canonical = JSON.stringify(reasoning, Object.keys(reasoning).sort());
@@ -56,46 +113,191 @@ export function hashReasoning(reasoning: ArbitrationReasoning): string {
 }
 
 /**
- * Verifiable Arbitration Client
- * 
- * Wraps the AI Arbitrator with SOLPRISM integration for
- * cryptographically provable reasoning.
+ * Convert an ArbitrationReasoning into a SOLPRISM ReasoningTrace
+ * for onchain commitment.
+ */
+function toSolprismTrace(reasoning: ArbitrationReasoning): ReasoningTrace {
+  return createReasoningTrace({
+    agentId: reasoning.agentId,
+    action: {
+      type: "arbitration",
+      description: `Dispute resolution for contract ${reasoning.contractId}, milestone ${reasoning.milestoneIndex}`,
+      params: {
+        contractId: reasoning.contractId,
+        milestoneIndex: reasoning.milestoneIndex,
+        contractDescription: reasoning.contractDescription,
+        milestoneDescription: reasoning.milestoneDescription,
+      },
+    },
+    reasoning: {
+      steps: [
+        `Evidence reviewed: ${reasoning.analysis.evidenceReviewed.join(", ")}`,
+        `Requirements met: ${reasoning.analysis.requirementsMet.join(", ") || "none"}`,
+        `Requirements partially met: ${reasoning.analysis.requirementsPartiallyMet.join(", ") || "none"}`,
+        `Requirements not met: ${reasoning.analysis.requirementsNotMet.join(", ") || "none"}`,
+        `Decision rationale: ${reasoning.decision.reasoning}`,
+      ],
+      inputs: [
+        `Freelancer proof: ${reasoning.freelancerProof}`,
+        `Client dispute: ${reasoning.clientDisputeReason}`,
+      ],
+      model: "claude-3-5-sonnet",
+    },
+    decision: {
+      outcome: reasoning.decision.type,
+      confidence: Math.round(reasoning.decision.confidence * 100),
+      details: reasoning.decision.splitPercentage
+        ? `Split: ${reasoning.decision.splitPercentage}% to freelancer`
+        : reasoning.decision.type === "favor_freelancer"
+          ? "Full payment released to freelancer"
+          : "Funds returned to client",
+    },
+  });
+}
+
+/**
+ * Format arbitration result for PayGuard onchain storage.
+ * Maps the decision to the program's DisputeDecision enum format.
+ */
+export function formatForOnChain(result: CommitResult): {
+  decisionType: number;
+  splitPercentage: number;
+  reasoningHash: number[];
+  solprismCommitment: string;
+} {
+  const decisionTypeMap = {
+    favor_freelancer: 0,
+    favor_client: 1,
+    split: 2,
+  };
+
+  return {
+    decisionType: decisionTypeMap[result.reasoning.decision.type],
+    splitPercentage: result.reasoning.decision.splitPercentage || 0,
+    reasoningHash: Array.from(Buffer.from(result.hash, "hex")),
+    solprismCommitment: result.commitmentAddress,
+  };
+}
+
+// ─── Verifiable Arbitrator ────────────────────────────────────────────────
+
+/**
+ * Verifiable Arbitrator — SOLPRISM-Powered
+ *
+ * Wraps PayGuard's AI arbitration with cryptographic commit-reveal
+ * reasoning via the SOLPRISM protocol. Every dispute decision is:
+ *
+ * 1. **Committed** — reasoning hash anchored onchain before funds move
+ * 2. **Executed** — PayGuard resolves the dispute per the decision
+ * 3. **Revealed** — full reasoning published onchain for verification
+ * 4. **Verifiable** — anyone can check the reasoning was not altered
+ *
+ * @example
+ * ```typescript
+ * const arbitrator = new VerifiableArbitrator({
+ *   connection,
+ *   anthropicApiKey: process.env.ANTHROPIC_API_KEY!,
+ *   agentName: "payguard-arbitrator",
+ * });
+ *
+ * // Register the arbitrator agent on SOLPRISM (one-time)
+ * await arbitrator.register(walletKeypair);
+ *
+ * // Analyze dispute and commit reasoning BEFORE resolution
+ * const result = await arbitrator.analyzeAndCommit(walletKeypair, {
+ *   contractId: "abc123",
+ *   milestoneIndex: 1,
+ *   contractDescription: "Build a DEX frontend",
+ *   milestoneDescription: "Implement swap UI",
+ *   freelancerProof: "Delivered responsive swap interface with...",
+ *   clientDisputeReason: "Missing limit order feature",
+ * });
+ *
+ * // ... PayGuard executes resolve_dispute with result.hash ...
+ *
+ * // Reveal the full reasoning onchain
+ * await arbitrator.reveal(walletKeypair, result, "ipfs://Qm...");
+ *
+ * // Anyone can verify
+ * const verification = await arbitrator.verify(
+ *   result.commitmentAddress,
+ *   result.reasoning
+ * );
+ * console.log(verification.message);
+ * // ✅ Reasoning verified — the trace matches the onchain commitment
+ * ```
  */
 export class VerifiableArbitrator {
+  private solprism: SolprismClient;
   private connection: Connection;
   private anthropicApiKey: string;
-  private agentId: string;
+  private agentName: string;
   private model: string;
+  private reasoningStorageUri: string;
 
-  constructor(
-    connection: Connection,
-    anthropicApiKey: string,
-    agentId: string = "payguard-arbitrator",
-    model: string = "claude-3-5-sonnet-20241022"
-  ) {
-    this.connection = connection;
-    this.anthropicApiKey = anthropicApiKey;
-    this.agentId = agentId;
-    this.model = model;
+  constructor(config: SolprismArbitrationConfig) {
+    this.connection = config.connection;
+    this.anthropicApiKey = config.anthropicApiKey;
+    this.agentName = config.agentName || "payguard-arbitrator";
+    this.model = config.model || "claude-3-5-sonnet-20241022";
+    this.reasoningStorageUri = config.reasoningStorageUri || "";
+
+    this.solprism = new SolprismClient(
+      config.connection,
+      config.programId || SOLPRISM_PROGRAM_ID
+    );
   }
 
+  // ─── Registration ───────────────────────────────────────────────────
+
   /**
-   * Analyze a dispute and commit the reasoning hash BEFORE returning the decision.
-   * This ensures the reasoning cannot be changed after the fact.
+   * Register the arbitrator agent on SOLPRISM (one-time setup).
+   * Creates an onchain agent profile that tracks commitment history
+   * and accountability score.
+   *
+   * @param wallet - Keypair that will sign arbitration commitments
+   * @returns Transaction signature
    */
-  async analyzeAndCommit(params: {
-    contractId: string;
-    milestoneIndex: number;
-    contractDescription: string;
-    milestoneDescription: string;
-    freelancerProof: string;
-    clientDisputeReason: string;
-    additionalContext?: string;
-  }): Promise<CommitResult> {
-    // Step 1: Get AI analysis
+  async register(wallet: Keypair): Promise<string> {
+    const isRegistered = await this.solprism.isAgentRegistered(wallet.publicKey);
+    if (isRegistered) {
+      console.log(`[PayGuard] Agent "${this.agentName}" already registered on SOLPRISM`);
+      return "";
+    }
+
+    const sig = await this.solprism.registerAgent(wallet, this.agentName);
+    console.log(`[PayGuard] Agent "${this.agentName}" registered on SOLPRISM`);
+    console.log(`  Tx: ${sig}`);
+    return sig;
+  }
+
+  // ─── Commit (Pre-Resolution) ───────────────────────────────────────
+
+  /**
+   * Analyze a dispute with AI and commit the reasoning hash onchain
+   * BEFORE the dispute is resolved. This is the core trust guarantee:
+   * the reasoning is locked in before funds move.
+   *
+   * @param wallet - Keypair for signing the SOLPRISM commitment
+   * @param params - Dispute context (contract, milestone, evidence)
+   * @returns CommitResult with hash, tx, and full reasoning
+   */
+  async analyzeAndCommit(
+    wallet: Keypair,
+    params: {
+      contractId: string;
+      milestoneIndex: number;
+      contractDescription: string;
+      milestoneDescription: string;
+      freelancerProof: string;
+      clientDisputeReason: string;
+      additionalContext?: string;
+    }
+  ): Promise<CommitResult> {
+    // Step 1: AI analyzes the dispute
     const analysis = await this.getAIAnalysis(params);
 
-    // Step 2: Create full reasoning object
+    // Step 2: Build the full reasoning object
     const reasoning: ArbitrationReasoning = {
       contractId: params.contractId,
       milestoneIndex: params.milestoneIndex,
@@ -106,40 +308,141 @@ export class VerifiableArbitrator {
       analysis: analysis.analysis,
       decision: analysis.decision,
       timestamp: Date.now(),
-      agentId: this.agentId,
+      agentId: this.agentName,
     };
 
-    // Step 3: Hash the reasoning
+    // Step 3: Convert to SOLPRISM reasoning trace
+    const trace = toSolprismTrace(reasoning);
+
+    // Step 4: Commit the hash onchain via SOLPRISM
+    const commitResult = await this.solprism.commitReasoning(wallet, trace);
+
     const hash = hashReasoning(reasoning);
 
-    // Step 4: Commit hash to SOLPRISM (would call their SDK here)
-    // For now, we store locally and return the hash
-    // In production: await solprism.commitReasoning(hash)
-    
-    console.log(`[PayGuard] Arbitration reasoning committed`);
-    console.log(`  Hash: ${hash}`);
-    console.log(`  Decision: ${reasoning.decision.type}`);
+    console.log(`[PayGuard] Arbitration reasoning committed via SOLPRISM`);
+    console.log(`  Hash:       ${hash}`);
+    console.log(`  Commitment: ${commitResult.commitmentAddress}`);
+    console.log(`  Tx:         ${commitResult.signature}`);
+    console.log(`  Decision:   ${reasoning.decision.type}`);
     if (reasoning.decision.splitPercentage) {
-      console.log(`  Split: ${reasoning.decision.splitPercentage}% to freelancer`);
+      console.log(`  Split:      ${reasoning.decision.splitPercentage}% to freelancer`);
     }
+    console.log(`  Confidence: ${(reasoning.decision.confidence * 100).toFixed(0)}%`);
+    console.log(`  Explorer:   https://www.solprism.app/commitment/${commitResult.commitmentAddress}`);
 
     return {
       hash,
+      commitTx: commitResult.signature,
+      commitmentAddress: commitResult.commitmentAddress,
+      slot: commitResult.slot,
       reasoning,
-      // commitTx would be returned from SOLPRISM
     };
   }
 
+  // ─── Reveal (Post-Resolution) ──────────────────────────────────────
+
   /**
-   * Verify that a stored reasoning matches a given hash
+   * Reveal the full arbitration reasoning onchain after the dispute
+   * has been resolved. This makes the reasoning publicly auditable.
+   *
+   * @param wallet - Keypair for signing the reveal transaction
+   * @param commitResult - The result from analyzeAndCommit
+   * @param reasoningUri - URI where the full reasoning JSON is stored
+   * @returns RevealResult with transaction signature
    */
-  verify(hash: string, reasoning: ArbitrationReasoning): boolean {
+  async reveal(
+    wallet: Keypair,
+    commitResult: CommitResult,
+    reasoningUri: string
+  ): Promise<RevealResult> {
+    const revealResult = await this.solprism.revealReasoning(
+      wallet,
+      commitResult.commitmentAddress,
+      reasoningUri
+    );
+
+    console.log(`[PayGuard] Arbitration reasoning revealed on SOLPRISM`);
+    console.log(`  Commitment: ${commitResult.commitmentAddress}`);
+    console.log(`  Reveal Tx:  ${revealResult.signature}`);
+    console.log(`  URI:        ${reasoningUri}`);
+    console.log(`  Explorer:   https://www.solprism.app/commitment/${commitResult.commitmentAddress}`);
+
+    return {
+      revealTx: revealResult.signature,
+      reasoningUri,
+    };
+  }
+
+  // ─── Verify (Anyone Can Call) ──────────────────────────────────────
+
+  /**
+   * Verify that arbitration reasoning matches its onchain commitment.
+   * This is the core accountability check — anyone (client, freelancer,
+   * or third party) can call this to confirm the AI's reasoning was
+   * not altered after the commitment was made.
+   *
+   * @param commitmentAddress - The SOLPRISM commitment PDA
+   * @param reasoning - The arbitration reasoning to verify
+   * @returns VerifyResult with validity and details
+   */
+  async verify(
+    commitmentAddress: string,
+    reasoning: ArbitrationReasoning
+  ): Promise<VerifyResult> {
+    const trace = toSolprismTrace(reasoning);
+
+    const solprismResult = await this.solprism.verifyReasoning(
+      commitmentAddress,
+      trace
+    );
+
     const computedHash = hashReasoning(reasoning);
-    return computedHash === hash;
+    const explorerUrl = `https://www.solprism.app/commitment/${commitmentAddress}`;
+
+    return {
+      valid: solprismResult.valid,
+      message: solprismResult.valid
+        ? "✅ Arbitration reasoning verified — matches the onchain SOLPRISM commitment"
+        : "❌ Mismatch — the provided reasoning does not match the onchain commitment",
+      computedHash,
+      storedHash: solprismResult.storedHash,
+      reasoning,
+      explorerUrl,
+    };
+  }
+
+  // ─── Accountability ────────────────────────────────────────────────
+
+  /**
+   * Get the arbitrator's onchain accountability score from SOLPRISM.
+   * Higher scores indicate consistent commit-reveal behavior.
+   *
+   * @param authority - The arbitrator's public key
+   * @returns Accountability percentage (0-100) or null if not registered
+   */
+  async getAccountability(authority: PublicKey | string): Promise<number | null> {
+    return this.solprism.getAccountability(authority);
   }
 
   /**
-   * Get AI analysis for a dispute
+   * Get all past arbitration commitments for this arbitrator.
+   *
+   * @param authority - The arbitrator's public key
+   * @param limit - Maximum number of commitments to return
+   * @returns Array of onchain commitments
+   */
+  async getCommitmentHistory(
+    authority: PublicKey | string,
+    limit: number = 50
+  ) {
+    return this.solprism.getAgentCommitments(authority, limit);
+  }
+
+  // ─── AI Analysis (Private) ─────────────────────────────────────────
+
+  /**
+   * Run AI analysis on the dispute evidence.
+   * Returns structured analysis and decision.
    */
   private async getAIAnalysis(params: {
     contractDescription: string;
@@ -151,7 +454,9 @@ export class VerifiableArbitrator {
     analysis: ArbitrationReasoning["analysis"];
     decision: ArbitrationReasoning["decision"];
   }> {
-    const prompt = `You are an impartial arbitrator for a freelance contract dispute on PayGuard, an escrow platform on Solana. Your decision will result in real funds being transferred, so be fair and thorough.
+    const prompt = `You are an impartial arbitrator for a freelance contract dispute on PayGuard, an escrow platform on Solana. Your reasoning will be cryptographically committed onchain via SOLPRISM before any funds move — both parties can verify your logic was fair.
+
+Be thorough and fair. Real funds are at stake.
 
 CONTRACT DESCRIPTION:
 ${params.contractDescription}
@@ -172,6 +477,9 @@ Analyze this dispute carefully. Consider:
 2. What evidence shows the freelancer delivered?
 3. What is the client's specific complaint?
 4. Is this a communication issue, quality issue, or scope issue?
+5. What would a fair resolution look like?
+
+Your reasoning will be permanently recorded onchain and verifiable by both parties.
 
 Respond in JSON format:
 {
@@ -206,35 +514,13 @@ Respond in JSON format:
     const data = await response.json();
     const content = data.content[0].text;
 
-    // Parse JSON from response
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      throw new Error("Failed to parse arbitration response");
+      throw new Error("Failed to parse AI arbitration response");
     }
 
     return JSON.parse(jsonMatch[0]);
   }
-}
-
-/**
- * Format arbitration result for on-chain storage
- */
-export function formatForOnChain(result: CommitResult): {
-  decisionType: number; // 0 = freelancer, 1 = client, 2 = split
-  splitPercentage: number;
-  reasoningHash: number[];
-} {
-  const decisionTypeMap = {
-    favor_freelancer: 0,
-    favor_client: 1,
-    split: 2,
-  };
-
-  return {
-    decisionType: decisionTypeMap[result.reasoning.decision.type],
-    splitPercentage: result.reasoning.decision.splitPercentage || 0,
-    reasoningHash: Array.from(Buffer.from(result.hash, "hex")),
-  };
 }
 
 export default VerifiableArbitrator;
